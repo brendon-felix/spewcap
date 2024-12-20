@@ -51,7 +51,7 @@ pub fn get_settings() -> Settings {
     let args = Args::parse();
     if let Some(config) = get_config("config.toml".to_string()) {
         Settings {
-            port: args.port.or(config.port).unwrap_or("COM5".to_string()),
+            port: args.port.or(config.port).expect("No port specified!"),
             baud_rate: args.baud_rate.or(config.baud_rate).unwrap_or(115200),
             timestamps: args.timestamps.or(config.timestamps).unwrap_or(false),
             log_folder: args.log_folder.or(config.log_folder)
@@ -60,7 +60,7 @@ pub fn get_settings() -> Settings {
         }
     } else {
         Settings {
-            port: args.port.unwrap_or("COM5".to_string()),
+            port: args.port.expect("No port specified!"),
             baud_rate: args.baud_rate.unwrap_or(115200),
             timestamps: args.timestamps.unwrap_or(false),
             log_folder: args.log_folder
