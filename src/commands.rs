@@ -10,9 +10,17 @@ use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 use colored::*;
 use rfd::FileDialog;
 
-pub fn command_loop(config: Settings) -> Result<()> {
+pub fn command_handler(config: Settings) -> Result<()> {
+    std::thread::spawn(move || {
+        if let Err(_) = command_loop(config) {
+            std::process::exit(1);
+        }
+    });
+    Ok(())
+}
+
+fn command_loop(config: Settings) -> Result<()> {
     enable_raw_mode().context("couldn't enabled raw mode")?;
-    
     loop {
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(KeyEvent { code, kind, .. }) = event::read()? {
