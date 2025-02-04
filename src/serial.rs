@@ -68,20 +68,20 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
     let mut first_attempt = true;
     let mut status: Status;
     loop {
-        match open_serial_port(settings.port, settings.baud_rate) {
+        match open_serial_port(&settings.port, settings.baud_rate) {
             Some(port) => {
                 status = Status::Connected;
-                print_status_msg(settings.port, status);
+                print_status_msg(&settings.port, status);
                 print_separator("");
                 let mut stdout = Box::new(BufWriter::with_capacity(1024, io::stdout()));
                 let _ = read_loop(port, Arc::clone(&shared_state), &mut stdout);
                 status = Status::Disconnected;
-                print_status_msg(settings.port, status);
+                print_status_msg(&settings.port, status);
             }
             None => {
                 if first_attempt {
                     status = Status::NotConnected;
-                    print_status_msg(settings.port, status);
+                    print_status_msg(&settings.port, status);
                 }
                 sleep(500);
             }

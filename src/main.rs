@@ -18,7 +18,7 @@ mod utils;
 mod log;
 
 use args::Args;
-use settings::Settings;
+use settings::{Settings, Config};
 use state::State;
 
 use anyhow::{Result, Context, anyhow};
@@ -40,7 +40,8 @@ fn main() -> Result<()> {
     // } else {
     //     None
     // };
-    let settings = Settings::default();
+    let config = Config::load("config.toml");
+    let settings = Settings::new(config);
     let state = Arc::new(Mutex::new(State::default()));
     let (tx, rx) = mpsc::channel();
         
