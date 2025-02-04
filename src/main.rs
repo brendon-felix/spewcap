@@ -1,5 +1,7 @@
 
-
+// TODO: Expand interactive selection for config
+//   TODO: Only ask for settings not set by config
+//   TODO: Could probably remove Args after this
 // TODO: Propagate timestamps flag using args and settings (possibly combine settings and state)
 // TODO: Implement log at start
 // TODO: Re-implement arguments (port, baud_rate, log folder)
@@ -77,8 +79,7 @@ fn select_port() -> Result<String> {
     let ports = available_ports().context("Could not list ports")?;
     let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
     if ports.is_empty() {
-        println!("{}", "No ports found!".bold().red());
-        bail!("");
+        bail!("No ports found");
     }
     let selection = Select::new()
         .with_prompt("Select serial port")
