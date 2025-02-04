@@ -72,7 +72,7 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
             Some(port) => {
                 status = Status::Connected;
                 print_status_msg(&settings.port, status);
-                print_separator("");
+                // print_separator("");
                 let mut stdout = Box::new(BufWriter::with_capacity(1024, io::stdout()));
                 let _ = read_loop(port, Arc::clone(&shared_state), &mut stdout);
                 status = Status::Disconnected;

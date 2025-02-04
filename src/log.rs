@@ -6,7 +6,7 @@ use std::time::{Instant, Duration};
 use crate::utils::*;
 // use crate::settings::Settings;
 
-const REGEX_PATTERN: &str = r"\x1b\[[0-9;]*[mK]";
+
 
 pub struct Log {
     pub file: File,
@@ -18,7 +18,7 @@ pub struct Log {
 impl Log {
     pub fn new() -> Result<Self> {
         let file = create_log_file()?;
-        let ansi_regex = Regex::new(REGEX_PATTERN).unwrap();
+        let ansi_regex = ansi_regex();
         let start_time = Instant::now();
         print_separator("Start logging");
         Ok(Log {

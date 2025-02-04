@@ -6,6 +6,7 @@
 // TODO: Re-implement wipe log command
 // TODO: Re-implement save command
 // TODO: Implement set port command
+//   TODO: Pause spew while setting port
 
 
 mod args;
@@ -20,27 +21,35 @@ use args::Args;
 use settings::{Settings, Config};
 use state::State;
 
-use anyhow::{Result, Context, anyhow};
+use anyhow::{Result, Context, anyhow, bail};
 use clap::Parser;
+use dialoguer::Select;
 use serialport5::available_ports;
+use utils::clear_console;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::sync::mpsc;
 use colored::Colorize;
 
 fn main() -> Result<()> {
+    clear_console();
     let args = Args::parse();
-    if args.list {
-        list_ports()?;
-        return Ok(());
-    }
+    let port = select_port()?;
+    // if args.list {
+    //     list_ports()?;
+    //     return Ok(());
+    // }
     // let log_file = if args.logging {
     //     Some(utils::create_log_file())
     // } else {
     //     None
     // };
-    let config = Config::load("config.toml");
-    let settings = Settings::new(config);
+    // let config = Config::load("config.toml");
+    // let settings = Settings::new(config);
+    let settings = Settings {
+        port,
+        ..Default::default()
+    };
     let state = Arc::new(Mutex::new(State::default()));
     let (tx, rx) = mpsc::channel();
         
@@ -62,6 +71,22 @@ fn main() -> Result<()> {
     let _ = command_thread.join().map_err(|e| anyhow!("Thread panicked: {:?}", e))?;
 
     Ok(())
+}
+
+fn select_port() -> Result<String> {
+    let ports = available_ports().context("Could not list ports")?;
+    let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
+    if ports.is_empty() {
+        println!("{}", "No ports found!".bold().red());
+        bail!("");
+    }
+    let selection = Select::new()
+        .with_prompt("Select serial port")
+        .items(&port_names)
+        .interact()
+        .context("Could not select port")?;
+    let port = port_names[selection].to_string();
+    Ok(port)
 }
 
 fn list_ports() -> Result<()> {
