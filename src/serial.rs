@@ -23,6 +23,16 @@ impl fmt::Display for Status {
     }
 }
 
+struct Buffer {
+    array: [u8; 1024];
+    length: usize,
+}
+impl Buffer {
+    fn write(&self, data: &[u8]) {
+
+    }
+}
+
 pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
     let mut first_attempt = true;
     let mut status: Status;
@@ -68,31 +78,7 @@ fn read_serial_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<Stat
         match port.read(&mut data) {
             Ok(0) => return Ok(()),
             Ok(n) => {
-                let remaining_buffer_space = buffer.len() - buffer_index;
-                let bytes_to_copy = remaining_buffer_space.min(n); // only use the remaining space available
-                buffer[buffer_index..buffer_index + bytes_to_copy].copy_from_slice(&data[..bytes_to_copy]);
-                buffer_index += bytes_to_copy;
-                let mut start_of_line = 0;
-
-                while let Some(newline_index) = buffer[start_of_line..buffer_index].iter().position(|&b| b == b'\n') {
-                    let end_index = start_of_line + newline_index + 1;
-                    let line_bytes = &buffer[start_of_line..end_index];
-
-                    if let Ok(line) = std::str::from_utf8(line_bytes) {
-                        stdout.write_all(line.as_bytes()).context("Failed to write to stdout")?;
-                        let mut state = shared_state.lock().unwrap();
-                        if let Some(log) = &mut state.log {
-                            if log.enabled {
-                                log.write_line(line)?;
-                            }
-                        }
-                        stdout.flush().context("Failed to flush stdout")?;
-                    }
-                    start_of_line = end_index;
-                }
-                let remaining_bytes = buffer_index - start_of_line;
-                buffer.copy_within(start_of_line..buffer_index, 0);
-                buffer_index = remaining_bytes;
+                read_line(&data, &buffer, buffer_index, n, stdout);
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => break Ok(()),
             Err(e) => {
@@ -101,4 +87,37 @@ fn read_serial_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<Stat
             }
         }
     }
+}
+
+fn copy_to_buffer() {
+    let remaining_buffer_space = buffer.len() - buffer_index;
+    let bytes_to_copy = remaining_buffer_space.min(n); // only use the remaining space available
+    buffer[buffer_index..buffer_index + bytes_to_copy].copy_from_slice(&data[..bytes_to_copy]);
+    buffer_index += bytes_to_copy;
+}
+
+fn read_line<W: Write>(data: &[u8], buffer: &[u8], buffer_index: usize, n: usize, stdout: &mut W) -> Result<()> {
+    
+    let mut start_of_line = 0;
+
+    while let Some(newline_index) = buffer[start_of_line..buffer_index].iter().position(|&b| b == b'\n') {
+        let end_index = start_of_line + newline_index + 1;
+        let line_bytes = &buffer[start_of_line..end_index];
+
+        if let Ok(line) = std::str::from_utf8(line_bytes) {
+            stdout.write_all(line.as_bytes()).context("Failed to write to stdout")?;
+            let mut state = shared_state.lock().unwrap();
+            if let Some(log) = &mut state.log {
+                if log.enabled {
+                    log.write_line(line)?;
+                }
+            }
+            stdout.flush().context("Failed to flush stdout")?;
+        }
+        start_of_line = end_index;
+    }
+    let remaining_bytes = buffer_index - start_of_line;
+    buffer.copy_within(start_of_line..buffer_index, 0);
+    buffer_index = remaining_bytes;
+    Ok(())
 }

@@ -38,7 +38,7 @@ pub fn command_loop(shared_state: Arc<Mutex<State>>) -> Result<()> {
                         // KeyCode::Char('q') => state::quit(&shared_state),
                         // KeyCode::Char('q') => return Ok(()),
                         // KeyCode::Char('s') => save(&config.log_folder),
-                        // KeyCode::Char('p') => set_port(),
+                        KeyCode::Char('p') => set_port(),
                         KeyCode::Char('h') => help_message(),
                         _ => {}
                     }
@@ -104,9 +104,10 @@ fn quit() {
 //     todo!()
 // }
 
-// fn set_port() {
-//     print_separator("Set serial port");
-// }
+fn set_port() {
+    print_separator("Set serial port");
+    
+}
 
 
 pub fn toggle_logging(shared_state: &Arc<Mutex<State>>) {
