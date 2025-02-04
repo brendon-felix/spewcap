@@ -50,7 +50,7 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
 }
 
 fn print_status_msg(port_name: &str, status: Status) {
-    println!("{} {}", port_name, status);
+    print_separator(format!("{} {}", port_name, status));
 }
 
 fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {

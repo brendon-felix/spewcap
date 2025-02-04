@@ -27,6 +27,10 @@ pub struct Args {
     pub list: bool
 }
 
+// impl Args {
+    
+// }
+
 // pub fn args_handler() -> Result<()> {
 //     let args = Args::parse();
 //     if args.list {
