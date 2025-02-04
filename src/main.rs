@@ -5,7 +5,6 @@
 // TODO: Re-implement arguments (port, baud_rate, log folder)
 // TODO: Re-implement wipe log command
 // TODO: Re-implement save command
-// TODO: Possibly re-implement configuration file
 // TODO: Implement set port command
 
 
