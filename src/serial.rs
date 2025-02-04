@@ -1,3 +1,4 @@
+// use anyhow::Error;
 use anyhow::{Context, Result, bail};
 use std::sync::{Arc, Mutex};
 use serialport5::{self, SerialPort, SerialPortBuilder};
@@ -23,15 +24,45 @@ impl fmt::Display for Status {
     }
 }
 
+
 struct Buffer {
-    array: [u8; 1024];
-    length: usize,
+    buffer: [u8; 1024],
+    index: usize,
+    line_index: usize,
 }
 impl Buffer {
-    fn write(&self, data: &[u8]) {
-
+    fn new() -> Self {
+        Buffer {
+            buffer: [0; 1024],
+            index: 0,
+            line_index: 0,
+        }
+    }
+    fn write(&mut self, data_buffer: &[u8], data_size: usize) {
+        let remaining_buffer_space = self.buffer.len() - self.index;
+        let num_bytes = remaining_buffer_space.min(data_size); // only use the remaining space available
+        self.buffer[self.index.. self.index + num_bytes].copy_from_slice(&data_buffer[..num_bytes]);
+        self.index += num_bytes;
+    }
+    fn get_line(&mut self) -> Result<Option<&str>> {
+        if let Some(newline_index) = self.buffer[self.line_index..self.index].iter().position(|&b| b == b'\n') {
+            let line_end = self.line_index + newline_index + 1;
+            let line_bytes = &self.buffer[self.line_index..line_end];
+            self.line_index = line_end;
+            let line = std::str::from_utf8(line_bytes).context("Could not read line")?;
+            Ok(Some(line))
+        } else {
+            Ok(None)
+        }
+    }
+    fn shift_remaining(&mut self) {
+        let remaining_bytes = self.index - self.line_index;
+        self.buffer.copy_within(self.line_index..self.index, 0);
+        self.line_index = 0;
+        self.index = remaining_bytes;
     }
 }
+
 
 pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
     let mut first_attempt = true;
@@ -43,7 +74,7 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
                 print_status_msg(settings.port, status);
                 print_separator("");
                 let mut stdout = Box::new(BufWriter::with_capacity(1024, io::stdout()));
-                let _ = read_serial_loop(port, Arc::clone(&shared_state), &mut stdout);
+                let _ = read_loop(port, Arc::clone(&shared_state), &mut stdout);
                 status = Status::Disconnected;
                 print_status_msg(settings.port, status);
             }
@@ -70,15 +101,18 @@ fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
         .open(port).ok()
 }
 
-fn read_serial_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<State>>, stdout: &mut W) -> Result<()> {
-    let mut buffer = [0; 1024];
-    let mut buffer_index = 0;
+fn read_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<State>>, stdout: &mut W) -> Result<()> {
+    let mut buffer = Buffer::new();
     loop {
-        let mut data = [0; 256];
-        match port.read(&mut data) {
+        let mut data_buffer = [0; 256];
+        match port.read(&mut data_buffer) {
             Ok(0) => return Ok(()),
-            Ok(n) => {
-                read_line(&data, &buffer, buffer_index, n, stdout);
+            Ok(data_size) => {
+                buffer.write(&data_buffer, data_size);
+                while let Some(line) = buffer.get_line()? {
+                    output_line(line, stdout, &shared_state)?;
+                }
+                buffer.shift_remaining();
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => break Ok(()),
             Err(e) => {
@@ -89,35 +123,14 @@ fn read_serial_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<Stat
     }
 }
 
-fn copy_to_buffer() {
-    let remaining_buffer_space = buffer.len() - buffer_index;
-    let bytes_to_copy = remaining_buffer_space.min(n); // only use the remaining space available
-    buffer[buffer_index..buffer_index + bytes_to_copy].copy_from_slice(&data[..bytes_to_copy]);
-    buffer_index += bytes_to_copy;
-}
-
-fn read_line<W: Write>(data: &[u8], buffer: &[u8], buffer_index: usize, n: usize, stdout: &mut W) -> Result<()> {
-    
-    let mut start_of_line = 0;
-
-    while let Some(newline_index) = buffer[start_of_line..buffer_index].iter().position(|&b| b == b'\n') {
-        let end_index = start_of_line + newline_index + 1;
-        let line_bytes = &buffer[start_of_line..end_index];
-
-        if let Ok(line) = std::str::from_utf8(line_bytes) {
-            stdout.write_all(line.as_bytes()).context("Failed to write to stdout")?;
-            let mut state = shared_state.lock().unwrap();
-            if let Some(log) = &mut state.log {
-                if log.enabled {
-                    log.write_line(line)?;
-                }
-            }
-            stdout.flush().context("Failed to flush stdout")?;
+fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &Arc<Mutex<State>>, ) -> Result<()> {
+    stdout.write_all(line.as_bytes()).context("Failed to write to stdout")?;
+    let mut state = shared_state.lock().unwrap();
+    if let Some(log) = &mut state.log {
+        if log.enabled {
+            log.write_line(line)?;
         }
-        start_of_line = end_index;
     }
-    let remaining_bytes = buffer_index - start_of_line;
-    buffer.copy_within(start_of_line..buffer_index, 0);
-    buffer_index = remaining_bytes;
+    stdout.flush().context("Failed to flush stdout")?;
     Ok(())
 }
