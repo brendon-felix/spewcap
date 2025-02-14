@@ -7,11 +7,11 @@
 // TODO: Implement set port command
 //   TODO: Pause spew while setting port
 
+mod utils;
 mod settings;
 mod state;
 mod serial;
 mod commands;
-mod utils;
 mod log;
 
 fn main() {
