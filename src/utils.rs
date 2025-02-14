@@ -6,9 +6,6 @@ use regex::Regex;
 use crate::log::Log;
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
-pub fn ansi_regex() -> Regex {
-    Regex::new(ANSI_REGEX).unwrap()
-}
 
 pub fn sleep(num_ms: u64) {
     std::thread::sleep(Duration::from_millis(num_ms));
@@ -16,6 +13,10 @@ pub fn sleep(num_ms: u64) {
 
 pub fn clear_console() {
     let _ = std::process::Command::new("cmd").args(["/c", "cls"]).status();
+}
+
+pub fn ansi_regex() -> Regex {
+    Regex::new(ANSI_REGEX).unwrap()
 }
 
 pub fn reset_ansi() {

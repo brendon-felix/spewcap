@@ -35,7 +35,6 @@ pub struct Settings {
     pub timestamps: bool,
     pub log_on_start: bool,
     // pub log_folder: &str,
-    // pub clear_on_start: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -58,10 +57,6 @@ pub struct Args {
 
     // /// Folder path to save logs
     // #[arg(short, long)]
-    // pub logging: bool,
-
-    // /// Folder path to save logs
-    // #[arg(short, long)]
     // log_folder: Option<String>,
 
     #[arg(long)]
@@ -75,7 +70,6 @@ struct Config {
     timestamps: Option<bool>,
     log_on_start: Option<bool>
     // log_folder: Option<String>,
-    // clear_on_start: Option<bool>,
 }
 impl Config {
     fn load(file_path: &str) -> Option<Self> {
@@ -94,7 +88,6 @@ impl Config {
 }
 
 fn select_port() -> String {
-    // print_separator("");
     let ports = available_ports().expect("Could not find available ports!");
     let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
     if ports.is_empty() {
@@ -110,7 +103,6 @@ fn select_port() -> String {
 }
 
 fn select_baud_rate() -> u32 {
-    // print_separator("");
     let options = vec![4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
     let selection = Select::new()
         .with_prompt("Select baud rate")

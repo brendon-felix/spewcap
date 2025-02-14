@@ -3,8 +3,7 @@ use std::io::Write;
 use regex::Regex;
 use std::time::{Instant, Duration};
 use chrono::Local;
-use crate::utils::*;
-// use crate::settings::Settings;
+use crate::utils::{ansi_regex, print_separator};
 
 pub struct Log {
     pub file: File,
@@ -64,8 +63,5 @@ impl Log {
 fn create_log_file() -> Result<File, std::io::Error> {
     let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
     let file_path = format!("{}", filename);
-    // if fs::metadata(file_path).is_ok() {
-    //     fs::remove_file(file_path).context("Failed to remove existing output file")?;
-    // }
     File::create(file_path)
 }

@@ -1,5 +1,6 @@
 
 // TODO: Re-implement wipe log command
+// TODO: Re-implement log folder setting
 // TODO: Update state logic to track if the port is connected
 // TODO: Update state logic to quit more gracefully (change command)
 // TODO: Implement save as... command

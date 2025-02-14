@@ -34,8 +34,7 @@ pub fn command_loop(shared_state: Arc<Mutex<State>>) {
 }
 
 fn wipe_active_log() {
-    // File::create("log.txt").expect("Failed to truncate the file");
-    // print_separator("Output file wiped");
+    print_separator("Output file wiped");
     todo!()
 }
 

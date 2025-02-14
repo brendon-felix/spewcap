@@ -1,5 +1,3 @@
-// use anyhow::Error;
-// use anyhow::{Context, Result, bail};
 use std::sync::{Arc, Mutex};
 use serialport5::{self, SerialPort, SerialPortBuilder};
 use std::io::{self, BufWriter, Read, Write};
