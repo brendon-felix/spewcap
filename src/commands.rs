@@ -8,7 +8,7 @@ use crossterm::{
 
 use crate::{
     state::State,
-    utils::*,
+    utils::{clear_console, print_separator, try_create_log},
 };
 
 pub fn command_loop(shared_state: Arc<Mutex<State>>) {
