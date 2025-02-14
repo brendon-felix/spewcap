@@ -55,7 +55,7 @@ fn help_message() {
 
 fn quit() {
     // println!("QUITTING");
-    disable_raw_mode().expect("Could not diable raw mode");
+    disable_raw_mode().expect("Could not disable raw mode");
     std::process::exit(0);
 }
 
