@@ -19,7 +19,7 @@ mod log;
 
 use utils::clear_console;
 use settings::get_settings;
-use state::*;
+use state::{init_state, shared_state};
 
 fn main() {
     clear_console();

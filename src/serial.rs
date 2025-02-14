@@ -4,8 +4,8 @@ use std::io::{self, BufWriter, Read, Write};
 use colored::Colorize;
 use std::fmt;
 use crate::settings::Settings;
-use crate::state::*;
-use crate::utils::*;
+use crate::state::State;
+use crate::utils::{sleep, print_separator, try_create_log};
 
 enum Status {
     Connected,
