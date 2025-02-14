@@ -48,12 +48,12 @@ fn wipe_active_log() {
 
 fn help_message() {
     print_separator("Help");
-    println!("Press the following keys to execute commands:");
+    println!("Use the following keys to execute commands:");
     println!("");
     println!("- `Q`: Quit the application");
     println!("- `C`: Clear the console");
     println!("- `L`: Start a new log");
-    println!("- `L`: Pause/resume logging");
+    println!("- `P`: Pause/resume logging");
     println!("- `D`: Wipe the active log");
     println!("- `S`: Save active log as...");
     println!("- `H`: Display this help message");
