@@ -1,31 +1,29 @@
-use anyhow::{Result, Context};
 use std::fs::File;
 use std::io::Write;
 use regex::Regex;
 use std::time::{Instant, Duration};
+use chrono::Local;
 use crate::utils::*;
 // use crate::settings::Settings;
-
-
 
 pub struct Log {
     pub file: File,
     pub enabled: bool,
-    ansi_regex: Regex,
     timestamps: bool,
+    ansi_regex: Regex,
     start_time: Instant,
 }
 impl Log {
-    pub fn new() -> Result<Self> {
+    pub fn new(timestamps: bool) -> Result<Self, std::io::Error> {
         let file = create_log_file()?;
         let ansi_regex = ansi_regex();
         let start_time = Instant::now();
-        print_separator("Start logging");
+        print_separator("Started new log");
         Ok(Log {
             file,
             enabled: true,
+            timestamps,
             ansi_regex,
-            timestamps: false,
             start_time,
         })
     }
@@ -36,19 +34,18 @@ impl Log {
             let _ = self.write_line("=== Resumed logging ==\n");
             print_separator("Resumed logging");
         } else {
-            let _ = self.write_line("=== Paused logging ===\n");
+            let _ = self.write_line("=== Paused  logging ==\n");
             print_separator("Paused logging");
         }
     }
 
-    pub fn write_line(&mut self, raw_line: &str) -> Result<()> {
+    pub fn write_line(&mut self, raw_line: &str) {
         let mut line = self.ansi_regex.replace_all(raw_line, "").to_string();
         if self.timestamps {
             let timestamp = Log::create_timestamp(self.start_time.elapsed());
             line = format!("[{}] {}", timestamp, line);
         }
-        self.file.write_all(line.as_bytes()).context("Failed to write to log")?;
-        Ok(())
+        self.file.write_all(line.as_bytes()).expect("Failed to write to log");
     }
 
     pub fn create_timestamp(duration: Duration) -> String {
@@ -60,5 +57,15 @@ impl Log {
     
         format!("{:02}:{:02}:{:02}:{:03}ms", hours, minutes, seconds, millis)
     }
+
 }
 
+
+fn create_log_file() -> Result<File, std::io::Error> {
+    let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
+    let file_path = format!("{}", filename);
+    // if fs::metadata(file_path).is_ok() {
+    //     fs::remove_file(file_path).context("Failed to remove existing output file")?;
+    // }
+    File::create(file_path)
+}

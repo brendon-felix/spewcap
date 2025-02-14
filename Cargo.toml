@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.95"
 clap = { version = "4.5.27", features = ["derive"] }
 serialport5 = { version = "5.0.2"} # currenly the only branch which works on windows
 toml = "0.8.19"
