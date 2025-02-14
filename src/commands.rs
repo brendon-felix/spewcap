@@ -15,20 +15,28 @@ pub fn command_loop(shared_state: Arc<Mutex<State>>) {
     enable_raw_mode().expect("Could not enable raw mode");
     loop {
         if event::poll(Duration::from_millis(100)).expect("Could not poll for key events") {
-            if let Event::Key(KeyEvent { code, kind, .. }) = event::read().expect("Could not read key event") {
-                if kind == KeyEventKind::Press {
-                    match code {
-                        KeyCode::Char('q') => quit(),
-                        KeyCode::Char('c') => clear_console(),
-                        KeyCode::Char('l') => create_new_log(&shared_state),
-                        KeyCode::Char('p') => toggle_pause_logging(&shared_state),
-                        KeyCode::Char('d') => wipe_active_log(),
-                        // KeyCode::Char('s') => save(&config.log_folder),
-                        KeyCode::Char('h') => help_message(),
-                        _ => {}
-                    }
-                }
+            if let Event::Key(KeyEvent {
+                code,
+                kind,
+                ..
+            }) = event::read().expect("Could not read key event") {
+                handle_key_event(code, kind, &shared_state);
             }
+        }
+    }
+}
+
+fn handle_key_event(code: KeyCode, kind: KeyEventKind, shared_state: &Arc<Mutex<State>>) {
+    if kind == KeyEventKind::Press {
+        match code {
+            KeyCode::Char('q') => quit(),
+            KeyCode::Char('c') => clear_console(),
+            KeyCode::Char('l') => create_new_log(shared_state),
+            KeyCode::Char('p') => toggle_pause_logging(shared_state),
+            KeyCode::Char('d') => wipe_active_log(),
+            // KeyCode::Char('s') => save(&config.log_folder),
+            KeyCode::Char('h') => help_message(),
+            _ => {}
         }
     }
 }
