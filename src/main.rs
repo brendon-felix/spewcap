@@ -33,5 +33,4 @@ fn main() {
 
     let _ = serial_thread.join().map_err(|e| println!("Serial thread panicked: {:?}", e));
     let _ = command_thread.join().map_err(|e| println!("Command thread panicked: {:?}", e));
-    println!("YAY!")
 }
