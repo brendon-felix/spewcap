@@ -54,7 +54,7 @@ fn handle_key_event(code: KeyCode, kind: KeyEventKind, settings: &Settings, shar
 
 fn wipe_active_log() {
     print_separator("Output file wiped");
-    todo!()
+    // TODO
 }
 
 fn help_message() {

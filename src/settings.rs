@@ -98,7 +98,8 @@ fn select_port() -> String {
     let ports = available_ports().expect("Could not find available ports!");
     let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
     if ports.is_empty() {
-        panic!("No serial ports found!");
+        eprintln!("No serial ports found!");
+        std::process::exit(0);
     }
     let selection = Select::new()
         .with_prompt("Select serial port")

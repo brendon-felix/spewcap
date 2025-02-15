@@ -124,7 +124,8 @@ fn read_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<State>>, st
             Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => break,
             Err(e) => {
                 // println!("Failed to read port: {}", e);
-                panic!("Failed to read port: {}", e);
+                eprintln!("Failed to read port: {}", e);
+                std::process::exit(0);
             }
         }
     }

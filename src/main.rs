@@ -1,4 +1,5 @@
 
+// TODO: Fix error handling (when the command loop panics, the serial loop can't end)
 // TODO: Re-implement wipe log command
 // TODO: Update state logic to track if the port is connected
 // TODO: Update state logic to quit more gracefully (change command)
