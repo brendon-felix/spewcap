@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-// use rfd::FileDialog;
+use rfd::FileDialog;
+use std::path::PathBuf;
+
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
     terminal::{enable_raw_mode, disable_raw_mode},
@@ -8,33 +10,42 @@ use crossterm::{
 
 use crate::{
     state::State,
+    settings::Settings,
     utils::{clear_console, print_separator, try_create_log},
 };
 
-pub fn command_loop(shared_state: Arc<Mutex<State>>) {
+const POLL_PERIOD: u64 = 100; // milliseconds
+
+pub fn command_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
+    // println!("COMMAND LOOP");
     enable_raw_mode().expect("Could not enable raw mode");
     loop {
-        if event::poll(Duration::from_millis(100)).expect("Could not poll for key events") {
-            if let Event::Key(KeyEvent {
-                code,
-                kind,
-                ..
-            }) = event::read().expect("Could not read key event") {
-                handle_key_event(code, kind, &shared_state);
-            }
+        if let Some((code, kind)) = poll_for_command() {
+            handle_key_event(code, kind, &settings, &shared_state);
         }
     }
 }
 
-fn handle_key_event(code: KeyCode, kind: KeyEventKind, shared_state: &Arc<Mutex<State>>) {
+fn poll_for_command() -> Option<(KeyCode, KeyEventKind)> {
+    if event::poll(Duration::from_millis(POLL_PERIOD)).expect("Could not poll for key events") {
+        if let Event::Key(KeyEvent { code, kind, ..
+        }) = event::read().expect("Could not read key event") {
+            return Some((code, kind));
+        }
+    }
+    None
+}
+
+fn handle_key_event(code: KeyCode, kind: KeyEventKind, settings: &Settings, shared_state: &Arc<Mutex<State>>) {
     if kind == KeyEventKind::Press {
         match code {
             KeyCode::Char('q') => quit(),
+            KeyCode::Char('x') => quit(),
             KeyCode::Char('c') => clear_console(),
             KeyCode::Char('l') => create_new_log(shared_state),
             KeyCode::Char('p') => toggle_pause_logging(shared_state),
             KeyCode::Char('d') => wipe_active_log(),
-            // KeyCode::Char('s') => save(&config.log_folder),
+            KeyCode::Char('s') => save(&settings, shared_state),
             KeyCode::Char('h') => help_message(),
             _ => {}
         }
@@ -67,31 +78,39 @@ fn quit() {
     std::process::exit(0);
 }
 
-// fn save(_destination_path: &String) {
-//     // print_separator("Save output file");
-//     // if let Some(destination_path) = FileDialog::new()
-//     //     .add_filter("log", &["txt", "log"])
-//     //     .set_title("Save Log File")
-//     //     .set_directory(destination_path)
-//     //     .set_file_name("log.txt")
-//     //     .save_file()
-//     // {
-//     //     print_separator("");
-//     //     match fs::copy("log.txt", &destination_path) {
-//     //         Ok(_) => println!("Saved {}", destination_path.display()),
-//     //         Err(e) => println!("Error copying file: {}", e),
-//     //     }
-//     // } else {
-//     //     print_separator("");
-//     //     println!("Save operation was canceled");
-//     // }
+fn save(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
+    let state = shared_state.lock().unwrap();
+    if let Some(ref log) = state.log {
+        print_separator("Save output file");
+        if let Some(log_path) = select_log_path(&log.filename, &settings.log_folder) { 
+            match log.save_as(&log_path) {
+                Ok(_) => println!("Saved to {}", log_path.display()),
+                Err(e) => eprintln!("Error saving file: {}", e)
+            }
+        } else {
+            println!("Save operation was canceled!");
+        }
+    } else {
+        print_separator("");
+        println!("No log started! Press `L` to start one");
+    }
+    print_separator("");
+}
 
-//     // // let destination_path = "output.txt";
-    
-//     // print_separator("");
+fn select_log_path(filename: &str, log_folder_setting: &Option<PathBuf>) -> Option<PathBuf> {
+    let dialog = FileDialog::new();
 
-//     todo!()
-// }
+    let dialog = if let Some(path) = log_folder_setting {
+        dialog.set_directory(path)
+    } else {
+        dialog
+    };
+    dialog
+        .add_filter("log", &["txt", "log"])
+        .set_title("Save Log File")
+        .set_file_name(filename)
+        .save_file()
+}
 
 pub fn create_new_log(shared_state: &Arc<Mutex<State>>) {
     let mut state = shared_state.lock().unwrap();
@@ -102,7 +121,9 @@ pub fn toggle_pause_logging(shared_state: &Arc<Mutex<State>>) {
     let mut state = shared_state.lock().unwrap();
     match state.log {
         None => {
-            print_separator("!! No log started! Press `L` to start one !!")
+            print_separator("");
+            println!("No log started! Press `L` to start one");
+            print_separator("");
         }
         Some(ref mut log) => {
             log.toggle();

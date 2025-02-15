@@ -15,7 +15,3 @@ pub fn init_state(timestamps: bool) -> Arc<Mutex<State>> {
         }
     ))
 }
-
-pub fn shared_state(state: &Arc<Mutex<State>>) -> Arc<Mutex<State>> {
-    Arc::clone(state)
-}

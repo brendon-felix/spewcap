@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::io::Write;
+use std::path::PathBuf;
+use std::fs::copy;
 use regex::Regex;
 use std::time::{Instant, Duration};
 use chrono::Local;
@@ -7,6 +9,8 @@ use crate::utils::{ansi_regex, print_separator};
 
 pub struct Log {
     pub file: File,
+    pub filename: String,
+    pub file_path: PathBuf,
     pub enabled: bool,
     timestamps: bool,
     ansi_regex: Regex,
@@ -14,12 +18,16 @@ pub struct Log {
 }
 impl Log {
     pub fn new(timestamps: bool) -> Result<Self, std::io::Error> {
-        let file = create_log_file()?;
+        let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
+        let file_path = PathBuf::from(&filename);
+        let file = File::create(&file_path)?;
         let ansi_regex = ansi_regex();
         let start_time = Instant::now();
         print_separator("Started new log");
         Ok(Log {
             file,
+            filename,
+            file_path,
             enabled: true,
             timestamps,
             ansi_regex,
@@ -57,11 +65,7 @@ impl Log {
         format!("{:02}:{:02}:{:02}:{:03}ms", hours, minutes, seconds, millis)
     }
 
-}
-
-
-fn create_log_file() -> Result<File, std::io::Error> {
-    let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
-    let file_path = format!("{}", filename);
-    File::create(file_path)
+    pub fn save_as(&self, new_file_path: &PathBuf) -> Result<u64, std::io::Error> {
+        copy(&self.file_path, new_file_path)
+    }
 }

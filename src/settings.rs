@@ -1,5 +1,6 @@
 use std::fs;
 use toml;
+use std::path::PathBuf;
 use serialport5::available_ports;
 use dialoguer::Select;
 use serde::Deserialize;
@@ -10,11 +11,17 @@ pub fn get_settings() -> Settings {
     let mut config = Config::load("config.toml").unwrap_or(Config::default());
     config.use_args(args);
     config.select_missing();
+    let folder = if let Some(folder) = config.log_folder {
+        Some(PathBuf::from(folder))
+    } else {
+        None
+    };
     Settings {
         port: config.port.unwrap(),
         baud_rate: config.baud_rate.unwrap(),
         timestamps: config.timestamps.unwrap(),
         log_on_start: config.log_on_start.unwrap(),
+        log_folder: folder,
     }
 }
 
@@ -28,13 +35,13 @@ macro_rules! merge_config {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Settings {
     pub port: String,
     pub baud_rate: u32,
     pub timestamps: bool,
     pub log_on_start: bool,
-    // pub log_folder: &str,
+    pub log_folder: Option<PathBuf>,
 }
 
 #[derive(Parser, Debug)]
@@ -55,9 +62,9 @@ pub struct Args {
     #[arg(short, long)]
     log_on_start: bool,
 
-    // /// Folder path to save logs
-    // #[arg(short, long)]
-    // log_folder: Option<String>,
+    /// Folder path to save logs
+    #[arg(short = 'f', long)]
+    log_folder: Option<String>,
 
     #[arg(long)]
     list: bool
@@ -68,8 +75,8 @@ struct Config {
     port: Option<String>,
     baud_rate: Option<u32>,
     timestamps: Option<bool>,
-    log_on_start: Option<bool>
-    // log_folder: Option<String>,
+    log_on_start: Option<bool>,
+    log_folder: Option<String>,
 }
 impl Config {
     fn load(file_path: &str) -> Option<Self> {
@@ -77,7 +84,7 @@ impl Config {
         toml::from_str(&toml_str).ok()?
     }
     fn use_args(&mut self, args: Args) {
-        merge_config!(self, args, port, baud_rate);
+        merge_config!(self, args, port, baud_rate, log_folder);
         self.timestamps = Some(args.timestamps);
         self.log_on_start = Some(args.log_on_start);
     }

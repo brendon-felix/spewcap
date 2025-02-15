@@ -1,9 +1,7 @@
 
 // TODO: Re-implement wipe log command
-// TODO: Re-implement log folder setting
 // TODO: Update state logic to track if the port is connected
 // TODO: Update state logic to quit more gracefully (change command)
-// TODO: Implement save as... command
 // TODO: Implement set port command
 //   TODO: Pause spew while setting port
 
@@ -19,17 +17,8 @@ fn main() {
     let settings = settings::get_settings();
     let state = state::init_state(settings.timestamps);
 
-    // Spawn thread for serial connection
-    let shared_state1 = state::shared_state(&state);
-    let serial_thread = std::thread::spawn(move || {
-        serial::connect_loop(settings, shared_state1);
-    });
-
-    // Spawn thread for command handler
-    let shared_state2 = state::shared_state(&state);
-    let command_thread = std::thread::spawn(move || {
-        commands::command_loop(shared_state2);
-    });
+    let serial_thread = utils::start_thread(settings.clone(), &state, serial::connect_loop);
+    let command_thread = utils::start_thread(settings.clone(), &state, commands::command_loop);
 
     let _ = serial_thread.join().map_err(|e| println!("Serial thread panicked: {:?}", e));
     let _ = command_thread.join().map_err(|e| println!("Command thread panicked: {:?}", e));

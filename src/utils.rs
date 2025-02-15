@@ -2,7 +2,10 @@ use std::time::Duration;
 use std::fmt::Display;
 use std::ops::Deref;
 use regex::Regex;
+use std::{sync::{Arc, Mutex}, thread::JoinHandle};
 
+use crate::state::State;
+use crate::settings::Settings;
 use crate::log::Log;
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
@@ -55,4 +58,14 @@ pub fn print_separator<T: ToString + Deref<Target = str> + Display>(text: T) {
     } else {
         println!("----------------------- {} -----------------------", text);
     }
+}
+
+pub fn start_thread<F>(settings: Settings, state: &Arc<Mutex<State>>, task: F) -> JoinHandle<()>
+where
+    F: Fn(Settings, Arc<Mutex<State>>) + Send + 'static,
+    {
+    let state_clone = Arc::clone(&state);
+    std::thread::spawn(move || {
+        task(settings, state_clone);
+    })
 }

@@ -62,6 +62,7 @@ impl Buffer {
 
 
 pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
+    // println!("SERIAL LOOP");
     let mut first_attempt = true;
     let mut status: Status;
     let port_name = &settings.port;
