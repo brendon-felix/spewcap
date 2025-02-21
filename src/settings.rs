@@ -6,6 +6,8 @@ use dialoguer::Select;
 use serde::Deserialize;
 use clap::Parser;
 
+use crate::utils;
+
 macro_rules! merge_config {
     ($config:expr, $args:expr, $( $field:ident ),*) => {
         $(
@@ -61,7 +63,7 @@ pub struct Config {
     pub disable_welcome: Option<bool>,
 }
 impl Config {
-    fn load(file_path: &str) -> Option<Self> {
+    fn load(file_path: PathBuf) -> Option<Self> {
         let toml_str = fs::read_to_string(file_path).ok()?;
         toml::from_str(&toml_str).ok()?
     }
@@ -105,7 +107,14 @@ fn select_baud_rate() -> u32 {
 
 pub fn get_config() -> Config {
     let args = Args::parse();
-    let mut config = Config::load("spewcap_config.toml").unwrap_or(Config::default());
+    let curr_dir = utils::get_curr_directory();
+    let path_in_curr_dir = curr_dir.join("spewcap_config.toml");
+    let exe_dir = utils::get_exe_directory().unwrap_or(utils::get_curr_directory());
+    let path_in_exe_dir = exe_dir.join("spewcap_config.toml");
+    let mut config = Config::load(path_in_curr_dir).unwrap_or(
+        Config::load(path_in_exe_dir)
+            .unwrap_or(Config::default())
+    );
     config.use_args(args);
     config
 }

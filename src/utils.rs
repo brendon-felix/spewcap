@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::ops::Deref;
 use regex::Regex;
 use std::{sync::{Arc, Mutex}, thread::JoinHandle};
+use std::path::PathBuf;
 // use colored::Colorize;
 
 use crate::state::State;
@@ -67,6 +68,19 @@ pub fn start_quit(state: &Arc<Mutex<State>>) {
 pub fn did_quit(state: &Arc<Mutex<State>>) -> bool {
     let state = state.lock().unwrap();
     state.quitting
+}
+
+pub fn get_exe_directory() -> Option<PathBuf> {
+    if let Some(exe_path) = std::env::current_exe().ok() {
+        if let Some(exe_directory) = exe_path.parent() {
+            return Some(exe_directory.to_path_buf());
+        }
+    }
+    None
+}
+
+pub fn get_curr_directory() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 pub fn print_welcome() {
