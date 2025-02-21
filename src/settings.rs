@@ -1,7 +1,7 @@
 use std::fs;
 use toml;
 use std::path::PathBuf;
-use serialport5::available_ports;
+use serialport5::{available_ports, SerialPortType};
 use dialoguer::Select;
 use serde::Deserialize;
 use clap::Parser;
@@ -80,15 +80,22 @@ impl Config {
 
 fn select_port() -> String {
     let ports = available_ports().expect("Could not find available ports!");
-    let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
     if ports.is_empty() {
         eprintln!("No serial ports found!");
         std::process::exit(0);
     }
+    let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
+    let port_descriptions: Vec<String> = ports.iter().map(|port| {
+        let mut description = format!("{}", port.port_name);
+        if let SerialPortType::UsbPort(info) = &port.port_type {
+            description = format!("{} {}", info.manufacturer.as_deref().unwrap_or(""), info.product.as_deref().unwrap_or("")).trim().to_string();
+        }
+        description
+    }).collect();
     let selection = Select::new()
         .with_prompt("Select serial port")
         .default(0) // default is the first option
-        .items(&port_names)
+        .items(&port_descriptions)
         .interact()
         .expect("No serial port selected!");
     port_names[selection].to_string()
