@@ -105,7 +105,7 @@ fn select_baud_rate() -> u32 {
 
 pub fn get_config() -> Config {
     let args = Args::parse();
-    let mut config = Config::load("config.toml").unwrap_or(Config::default());
+    let mut config = Config::load("spewcap_config.toml").unwrap_or(Config::default());
     config.use_args(args);
     config
 }
