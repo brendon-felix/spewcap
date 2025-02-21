@@ -5,6 +5,7 @@ use std::fs::copy;
 use regex::Regex;
 use std::time::{Instant, Duration};
 use chrono::Local;
+use colored::Colorize;
 use crate::utils::{ansi_regex, print_separator};
 
 pub struct Log {
@@ -23,7 +24,7 @@ impl Log {
         let file = File::create(&file_path)?;
         let ansi_regex = ansi_regex();
         let start_time = Instant::now();
-        print_separator("Started new log");
+        print_separator("STARTED NEW LOG");
         Ok(Log {
             file,
             filename,
@@ -39,10 +40,10 @@ impl Log {
         self.enabled = !self.enabled;
         if self.enabled {
             let _ = self.write_line("=== Resumed logging ==\n");
-            print_separator("Resumed logging");
+            print_separator("RESUMED LOGGING");
         } else {
             let _ = self.write_line("=== Paused  logging ==\n");
-            print_separator("Paused logging");
+            print_separator("PAUSED LOGGING");
         }
     }
 
@@ -67,5 +68,18 @@ impl Log {
 
     pub fn save_as(&self, new_file_path: &PathBuf) -> Result<u64, std::io::Error> {
         copy(&self.file_path, new_file_path)
+    }
+}
+
+
+pub fn try_create_log(timestamps: bool) -> Option<Log> {
+    match Log::new(timestamps) {
+        Ok(log) => {
+            Some(log)
+        }
+        _ => {
+            print_separator("FAILED TO CREATE LOG FILE".red());
+            None
+        }
     }
 }

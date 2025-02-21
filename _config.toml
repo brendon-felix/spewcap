@@ -1,3 +1,7 @@
-port = 'COM7'
-baud_rate = 115200
-timestamps = true
+# port = ''
+# baud_rate = 115200
+# log_folder = ''
+
+timestamps = false
+log_on_start = false
+disable_welcome = false

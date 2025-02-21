@@ -6,25 +6,6 @@ use dialoguer::Select;
 use serde::Deserialize;
 use clap::Parser;
 
-pub fn get_settings() -> Settings {
-    let args = Args::parse();
-    let mut config = Config::load("config.toml").unwrap_or(Config::default());
-    config.use_args(args);
-    config.select_missing();
-    let folder = if let Some(folder) = config.log_folder {
-        Some(PathBuf::from(folder))
-    } else {
-        None
-    };
-    Settings {
-        port: config.port.unwrap(),
-        baud_rate: config.baud_rate.unwrap(),
-        timestamps: config.timestamps.unwrap(),
-        log_on_start: config.log_on_start.unwrap(),
-        log_folder: folder,
-    }
-}
-
 macro_rules! merge_config {
     ($config:expr, $args:expr, $( $field:ident ),*) => {
         $(
@@ -40,7 +21,6 @@ pub struct Settings {
     pub port: String,
     pub baud_rate: u32,
     pub timestamps: bool,
-    pub log_on_start: bool,
     pub log_folder: Option<PathBuf>,
 }
 
@@ -71,12 +51,14 @@ pub struct Args {
 }
 
 #[derive(Default, Deserialize, Debug)]
-struct Config {
+pub struct Config {
     port: Option<String>,
     baud_rate: Option<u32>,
     timestamps: Option<bool>,
-    log_on_start: Option<bool>,
     log_folder: Option<String>,
+    pub log_on_start: Option<bool>,
+    // pub clear_on_start: Option<bool>,
+    pub disable_welcome: Option<bool>,
 }
 impl Config {
     fn load(file_path: &str) -> Option<Self> {
@@ -88,7 +70,7 @@ impl Config {
         self.timestamps = Some(args.timestamps);
         self.log_on_start = Some(args.log_on_start);
     }
-    fn select_missing(&mut self) {
+    pub fn select_missing(&mut self) {
         self.port.get_or_insert_with(|| select_port());
         self.baud_rate.get_or_insert_with(|| select_baud_rate());
     }
@@ -121,3 +103,23 @@ fn select_baud_rate() -> u32 {
     options[selection]
 }
 
+pub fn get_config() -> Config {
+    let args = Args::parse();
+    let mut config = Config::load("config.toml").unwrap_or(Config::default());
+    config.use_args(args);
+    config
+}
+
+pub fn get_settings(config: &Config) -> Settings {
+    let folder = if let Some(folder) = &config.log_folder {
+        Some(PathBuf::from(folder))
+    } else {
+        None
+    };
+    Settings {
+        port: config.port.clone().unwrap(),
+        baud_rate: config.baud_rate.unwrap(),
+        timestamps: config.timestamps.unwrap_or(false),
+        log_folder: folder,
+    }
+}

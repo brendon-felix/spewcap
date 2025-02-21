@@ -1,26 +1,12 @@
 use std::sync::{Arc, Mutex};
 use serialport5::{self, SerialPort, SerialPortBuilder};
 use std::io::{self, BufWriter, Read, Write};
-use colored::Colorize;
-use std::fmt;
 use crate::settings::Settings;
 use crate::state::State;
-use crate::utils::{sleep, print_separator, try_create_log};
+use crate::utils::{did_quit, print_separator, sleep};
 
-enum Status {
-    Connected,
-    NotConnected,
-    Disconnected,
-}
-impl fmt::Display for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Status::Connected => write!(f, "{}", "connected".bold().green()),
-            Status::NotConnected => write!(f, "{}", "not connected".bold().yellow()),
-            Status::Disconnected => write!(f, "{}", "disconnected".bold().red())
-        }
-    }
-}
+//REMOVE THIS LATER
+use crate::state::ConnectionStatus;
 
 struct Buffer {
     buffer: [u8; 1024],
@@ -64,30 +50,26 @@ impl Buffer {
 pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
     // println!("SERIAL LOOP");
     let mut first_attempt = true;
-    let mut status: Status;
+    let mut status: ConnectionStatus;
     let port_name = &settings.port;
     loop {
         match open_serial_port(port_name, settings.baud_rate) {
             Some(port) => {
-                status = Status::Connected;
+                status = ConnectionStatus::Connected;
                 print_status_msg(port_name, status);
-                {
-                    let mut state = shared_state.lock().unwrap();
-                    state.log = if settings.log_on_start {
-                        try_create_log(state.timestamps)
-                    } else {
-                        None
-                    };            
-                }
                 // print_separator("");
                 let mut stdout = Box::new(BufWriter::with_capacity(1024, io::stdout()));
-                let _ = read_loop(port, Arc::clone(&shared_state), &mut stdout);
-                status = Status::Disconnected;
-                print_status_msg(port_name, status);
+                let quitting = read_loop(port, Arc::clone(&shared_state), &mut stdout);
+                if quitting {
+                    break;
+                } else {
+                    status = ConnectionStatus::Disconnected;
+                    print_status_msg(port_name, status);
+                }
             }
             None => {
                 if first_attempt {
-                    status = Status::NotConnected;
+                    status = ConnectionStatus::NotConnected;
                     print_status_msg(port_name, status);
                 }
                 sleep(500);
@@ -97,7 +79,7 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
     }
 }
 
-fn print_status_msg(port_name: &str, status: Status) {
+fn print_status_msg(port_name: &str, status: ConnectionStatus) {
     print_separator(format!("{} {}", port_name, status));
 }
 
@@ -108,30 +90,42 @@ fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
         .open(port).ok()
 }
 
-fn read_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<State>>, stdout: &mut W) {
+fn read_loop<W: Write>(mut port: SerialPort, shared_state: Arc<Mutex<State>>, stdout: &mut W) -> bool {
     let mut buffer = Buffer::new();
     loop {
+        if did_quit(&shared_state) {
+            return true;
+        }
         let mut data_buffer = [0; 256];
+        if port.bytes_to_read().unwrap_or(0) == 0 {
+            sleep(100);
+            continue;
+        }
         match port.read(&mut data_buffer) {
-            Ok(0) => return,
+            Ok(0) => return false,
             Ok(data_size) => {
                 buffer.write(&data_buffer, data_size);
                 while let Some(line) = buffer.get_line() {
                     output_line(line, stdout, &shared_state);
                 }
+                stdout.flush().expect("Failed to flush stdout");
                 buffer.shift_remaining();
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => break,
+            Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => return false,
             Err(e) => {
                 // println!("Failed to read port: {}", e);
                 eprintln!("Failed to read port: {}", e);
-                std::process::exit(0);
+                let mut state = shared_state.lock().unwrap();
+                state.connection_status = ConnectionStatus::NotConnected;
+                state.quitting = true;
+                return false;
+                // std::process::exit(0);
             }
         }
     }
 }
 
-fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &Arc<Mutex<State>>, ) {
+fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &Arc<Mutex<State>>) {
     let mut state = shared_state.lock().unwrap();
     stdout.write_all(line.as_bytes()).expect("Failed to write to stdout");
     if let Some(log) = &mut state.log {
@@ -139,5 +133,4 @@ fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &Arc<Mutex<St
             log.write_line(line);
         }
     }
-    stdout.flush().expect("Failed to flush stdout");
 }
