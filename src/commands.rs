@@ -80,13 +80,6 @@ fn help_message() {
     print_separator("");
 }
 
-// fn quit(shared_state: &Arc<Mutex<State>>) {
-//     println!("QUITTING");
-    
-//     println!("Set quitting to true");
-//     // std::process::exit(0);
-// }
-
 fn save(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
     let state = shared_state.lock().unwrap();
     if let Some(ref log) = state.log {
