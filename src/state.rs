@@ -1,42 +1,18 @@
-use colored::Colorize;
-use std::fmt;
-
 use std::sync::{Arc, Mutex};
 use crate::log::Log;
-use crate::settings::Settings;
 
-pub enum ConnectionStatus {
-    Connected,
-    NotConnected,
-    Disconnected,
-}
-impl fmt::Display for ConnectionStatus {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConnectionStatus::Connected => write!(f, "{}", "CONNECTED".bold().green()),
-            ConnectionStatus::NotConnected => write!(f, "{}", "NOT CONNECTED".bold().yellow()),
-            ConnectionStatus::Disconnected => write!(f, "{}", "DISCONNECTED".bold().red())
-        }
-    }
-}
-
-// #[derive(Default)]
 pub struct State {
-    pub connection_status: ConnectionStatus,
-    pub timestamps: bool,
-    pub log: Option<Log>,
-    // pub output_en: bool,
-    pub quitting: bool,
+    pub capture_paused: bool,
+    pub active_log: Option<Log>,
+    pub quit_requested: bool,
 }
 
-pub fn init_state(settings: &Settings) -> Arc<Mutex<State>> {
+pub fn init_state() -> Arc<Mutex<State>> {
     Arc::new(Mutex::new(
         State{
-            connection_status: ConnectionStatus::NotConnected,
-            timestamps: settings.timestamps,
-            log: None,
-            // output_en: true,
-            quitting: false,
+            capture_paused: false,
+            active_log: None,
+            quit_requested: false,
         }
     ))
 }

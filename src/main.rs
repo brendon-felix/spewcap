@@ -1,9 +1,7 @@
-
-// TODO: Implement command to pause terminal output as well
+// TODO: Remove temp log files after they are saved OR experiment with large String buffer
+//   TODO: If still using file buffers, implement command to wipe the active file
 // TODO: Fix error handling (when the command loop panics, the serial loop can't end)
-// TODO: Print "saved to ..." message before actually quitting when a log is active
-// TODO: Re-implement wipe log command
-// TODO: Update state logic to track if the port is connected
+//   TODO: Try and remove all expects, unwraps and panics
 // TODO: Implement set port command
 //   TODO: Pause spew while setting port
 
@@ -22,10 +20,9 @@ fn main() {
     }
     config.select_missing();
     let settings = settings::get_settings(&config);
-    let state = state::init_state(&settings);
+    let state = state::init_state();
     if config.log_on_start.unwrap_or(false) {
-        let mut state = state.lock().unwrap();
-        state.log = log::try_create_log(settings.timestamps);
+        utils::start_new_log(&settings, &state);
     }
 
     let serial_thread = utils::start_thread(settings.clone(), &state, serial::connect_loop);
