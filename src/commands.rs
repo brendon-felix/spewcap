@@ -6,45 +6,57 @@ use crossterm::terminal::enable_raw_mode;
 
 use crate::state::State;
 use crate::settings::Settings;
-use crate::utils::{self, print_separator, print_message};
+use crate::utils::{self, get_state, print_message, print_separator, print_warning, print_error};
 
 const POLL_PERIOD: u64 = 100; // milliseconds
 
 pub fn command_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
-    enable_raw_mode().expect("Could not enable raw mode");
+    if let Err(e) = enable_raw_mode() {
+        print_warning(&format!("Could not enable raw mode: {e}\nSome key commands may not work properly!"))
+    }
     loop {
-        if let Some((code, kind)) = poll_for_command() {
-            if utils::quit_requested(&shared_state) {
-                break;
-            }
-            handle_key_event(code, kind, &settings, &shared_state);
+        let result = match poll_for_command() {
+            Ok(Some((code, kind))) => {
+                if utils::quit_requested(&shared_state) { break; }
+                handle_command(code, kind, &settings, &shared_state)
+            },
+            Ok(None) => Ok(()),
+            Err(e) => Err(e)
+        };
+        if let Err(e) = result {
+            print_error(&format!("Command handler error: {e}"));
         }
     }
 }
 
-fn poll_for_command() -> Option<(KeyCode, KeyEventKind)> {
-    if event::poll(Duration::from_millis(POLL_PERIOD)).expect("Could not poll for key events") {
-        if let Event::Key(KeyEvent { code, kind, ..
-        }) = event::read().expect("Could not read key event") {
-            return Some((code, kind));
+fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind)>, String> {
+    let key_pressed = event::poll(Duration::from_millis(POLL_PERIOD))
+        .map_err(|e| format!("Could not poll for key event: {e}"))?;
+    let command = if key_pressed {
+        let event = event::read()
+            .map_err(|e| format!("Could not read key event: {e}"))?;
+        match event {
+            Event::Key(KeyEvent {code, kind, ..}) => Some((code, kind)),
+            _ => None
         }
-    }
-    None
+    } else { None };
+    Ok(command)
 }
 
-fn handle_key_event(code: KeyCode, kind: KeyEventKind, settings: &Settings, shared_state: &Arc<Mutex<State>>) {
+fn handle_command(code: KeyCode, kind: KeyEventKind, settings: &Settings, shared_state: &Arc<Mutex<State>>) -> Result<(), String> {
     if kind == KeyEventKind::Press {
         match code {
             KeyCode::Char('q') => utils::request_quit(settings, shared_state),
             KeyCode::Char('c') => utils::clear_console(),
-            KeyCode::Char('p') => toggle_pause_capture(shared_state),
+            KeyCode::Char('p') => toggle_pause_capture(shared_state)?,
             KeyCode::Char('n') => utils::start_new_log(&settings, shared_state),
             KeyCode::Char('s') => utils::save_active_log(&settings, shared_state),
-            KeyCode::Char('l') => toggle_pause_logging(shared_state),
+            KeyCode::Char('l') => toggle_pause_logging(shared_state)?,
             KeyCode::Char('h') => help_message(),
             _ => {}
         }
     }
+    Ok(())
 }
 
 fn help_message() {
@@ -62,17 +74,20 @@ fn help_message() {
     print_separator();
 }
 
-fn toggle_pause_capture(shared_state: &Arc<Mutex<State>>) {
-    let mut state = shared_state.lock().unwrap();
+fn toggle_pause_capture(shared_state: &Arc<Mutex<State>>) -> Result<(), String> {
+    let mut state = get_state(shared_state)?;
+
     state.capture_paused = !state.capture_paused;
     if state.capture_paused { print_message(format!("Capture {}", "paused".yellow())); }
         else                { print_message(format!("Capture {}", "resumed".green())); }
+    Ok(())
 }
 
-fn toggle_pause_logging(shared_state: &Arc<Mutex<State>>) {
-    let mut state = shared_state.lock().unwrap();
+fn toggle_pause_logging(shared_state: &Arc<Mutex<State>>) -> Result<(), String> {
+    let mut state = get_state(shared_state)?;
     match state.active_log {
         Some(ref mut log) => log.toggle(),
         None => utils::print_warning("No log started! Press `N` to start one")
     }
+    Ok(())
 }

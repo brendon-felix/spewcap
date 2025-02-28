@@ -5,7 +5,7 @@ use colored::Colorize;
 
 use crate::settings::Settings;
 use crate::state::State;
-use crate::utils::{quit_requested, print_message, sleep};
+use crate::utils::{quit_requested, print_message, print_error, sleep};
 
 pub enum ConnectionStatus {
     Connected,
@@ -37,8 +37,13 @@ impl Buffer {
             let line_end = self.line_index + newline_index + 1;
             let line_bytes = &self.buffer[self.line_index..line_end];
             self.line_index = line_end;
-            let line = std::str::from_utf8(line_bytes).expect("Could not read line");
-            Some(line)
+            match std::str::from_utf8(line_bytes) {
+                Ok(line) => Some(line),
+                Err(e) => {
+                    print_error(&format!("UTF-8 error: {e}"));
+                    None
+                }
+            }
         } else {
             None
         }
@@ -110,7 +115,9 @@ fn read_loop<W: Write>(mut port: SerialPort, shared_state: &Arc<Mutex<State>>, s
             output_line(line, stdout, &shared_state);
         }
         line_buffer.shift_remaining(); // move incomplete line to buffer start
-        stdout.flush().expect("Failed to flush stdout");
+        if let Err(e) = stdout.flush() {
+            print_error(&format!("Failed to flush stdout: {e}"));
+        }
     }
 }
 
@@ -118,7 +125,9 @@ fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &Arc<Mutex<St
     let mut state = shared_state.lock().unwrap();
     if state.capture_paused { return; }
 
-    stdout.write_all(line.as_bytes()).expect("Failed to write to stdout");
+    if let Err(e) = stdout.write_all(line.as_bytes()) {
+        print_error(&format!("Failed to write to stdout: {e}"));
+    }
     if let Some(log) = &mut state.active_log {
         if log.enabled {
             log.write_line(line);

@@ -72,13 +72,14 @@ impl Config {
         self.timestamps = Some(args.timestamps);
         self.log_on_start = Some(args.log_on_start);
     }
-    pub fn select_missing(&mut self) {
-        self.port.get_or_insert_with(|| select_port());
-        self.baud_rate.get_or_insert_with(|| select_baud_rate());
+    pub fn select_missing(&mut self) -> Result<(), String> {
+        if self.port.is_none() { self.port = Some(select_port()?); }
+        if self.baud_rate.is_none() { self.baud_rate = Some(select_baud_rate()?); }
+        Ok(())
     }
 }
 
-fn select_port() -> String {
+fn select_port() -> Result<String, String> {
     let ports = available_ports().expect("Could not find available ports!");
     if ports.is_empty() {
         eprintln!("No serial ports found!");
@@ -97,19 +98,19 @@ fn select_port() -> String {
         .default(0) // default is the first option
         .items(&port_descriptions)
         .interact()
-        .expect("No serial port selected!");
-    port_names[selection].to_string()
+        .map_err(|e| format!("No serial port selected: {e}"))?;
+    Ok(port_names[selection].to_string())
 }
 
-fn select_baud_rate() -> u32 {
-    let options = vec![4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
+fn select_baud_rate() -> Result<u32, String> {
+    let options = [4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
     let selection = Select::new()
         .with_prompt("Select baud rate")
         .default(5) // default is 115200 at index 5
         .items(&options)
         .interact()
-        .expect("No baud rate selected!");
-    options[selection]
+        .map_err(|e| format!("No baud rate selected: {e}"))?;
+    Ok(options[selection])
 }
 
 pub fn get_config() -> Config {
@@ -126,16 +127,16 @@ pub fn get_config() -> Config {
     config
 }
 
-pub fn get_settings(config: &Config) -> Settings {
-    let folder = if let Some(folder) = &config.log_folder {
-        Some(PathBuf::from(folder))
-    } else {
-        None
-    };
-    Settings {
-        port: config.port.clone().unwrap(),
-        baud_rate: config.baud_rate.unwrap(),
-        timestamps: config.timestamps.unwrap_or(false),
-        log_folder: folder,
-    }
+pub fn get_settings(config: &Config) -> Result<Settings, String> {
+    let port = config.port.clone().ok_or(format!("Could not set port"))?;
+    let baud_rate = config.baud_rate.ok_or(format!("Could not set baud rate"))?;
+    let timestamps = config.timestamps.unwrap_or(false);
+    let log_folder = config.log_folder.as_ref()
+        .map(|f| PathBuf::from(f));
+    Ok(Settings {
+        port,
+        baud_rate,
+        timestamps,
+        log_folder,
+    })
 }

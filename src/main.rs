@@ -18,8 +18,8 @@ fn main() {
     if !config.disable_welcome.unwrap_or(false) {
         utils::print_welcome();
     }
-    config.select_missing();
-    let settings = settings::get_settings(&config);
+    config.select_missing().unwrap_or_else(|e| panic!("Error: {}", e));
+    let settings = settings::get_settings(&config).unwrap_or_else(|e| panic!("Error: {}", e));
     let state = state::init_state();
     if config.log_on_start.unwrap_or(false) {
         utils::start_new_log(&settings, &state);

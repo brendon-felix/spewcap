@@ -2,7 +2,7 @@ use std::time::Duration;
 use std::fmt::Display;
 use std::ops::Deref;
 use regex::Regex;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::path::PathBuf;
 use colored::Colorize;
@@ -14,6 +14,10 @@ use crate::settings::Settings;
 use crate::log::Log;
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
+
+pub fn get_state(shared_state: &Arc<Mutex<State>>) -> Result<MutexGuard<State>, String> {
+    shared_state.lock().map_err(|e| format!("Failed to acquire lock on shared state: {e}"))
+}
 
 pub fn sleep(num_ms: u64) {
     std::thread::sleep(Duration::from_millis(num_ms));
