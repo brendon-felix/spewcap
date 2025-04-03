@@ -2,6 +2,8 @@
 
 `spewcap` is a Rust-based command-line application for capturing and logging serial port data. It provides a user-friendly interface for managing serial port connections, capturing data, and saving logs.
 
+![demo](demo.gif)
+
 ## Features
 
 - Connect to serial ports and capture data.

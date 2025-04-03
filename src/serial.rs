@@ -71,7 +71,7 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
                     ConnectionStatus::Disconnected => print_status(port_name, ConnectionStatus::Disconnected),
                     ConnectionStatus::NotConnected => print_status(port_name, ConnectionStatus::NotConnected),
                 }
-            }
+            },
             None => {
                 if first_attempt {
                     print_status(port_name, ConnectionStatus::NotConnected);
