@@ -39,8 +39,8 @@ impl Buffer {
             self.line_index = line_end;
             match std::str::from_utf8(line_bytes) {
                 Ok(line) => Some(line),
-                Err(e) => {
-                    print_error(&format!("UTF-8 error: {e}"));
+                Err(_e) => {
+                    // print_error(&format!("UTF-8 error: {e}"));
                     None
                 }
             }
