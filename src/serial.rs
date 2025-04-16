@@ -39,10 +39,14 @@ impl Buffer {
             self.line_index = line_end;
             match std::str::from_utf8(line_bytes) {
                 Ok(line) => Some(line),
-                Err(_e) => {
-                    // print_error(&format!("UTF-8 error: {e}"));
-                    None
+                Err(e) if e.valid_up_to() > 0 => {
+                    let valid_bytes = &line_bytes[..e.valid_up_to()];
+                    match std::str::from_utf8(valid_bytes) {
+                        Ok(valid_line) => Some(valid_line),
+                        Err(_) => None
+                    }
                 }
+                Err(_) => None
             }
         } else {
             None
