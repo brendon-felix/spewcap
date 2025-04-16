@@ -32,7 +32,7 @@ impl Buffer {
         self.buffer[self.index.. self.index + num_bytes].copy_from_slice(&data_buffer[..num_bytes]);
         self.index += num_bytes;
     }
-    fn get_line(&mut self) -> Option<&str> {
+    fn parse_line(&mut self) -> Option<&str> {
         if let Some(newline_index) = self.buffer[self.line_index..self.index].iter().position(|&b| b == b'\n') {
             let line_end = self.line_index + newline_index + 1;
             let line_bytes = &self.buffer[self.line_index..line_end];
@@ -115,7 +115,7 @@ fn read_loop<W: Write>(mut port: SerialPort, shared_state: &Arc<Mutex<State>>, s
             },
             _ => return ConnectionStatus::Disconnected,
         }
-        while let Some(line) = line_buffer.get_line() {
+        while let Some(line) = line_buffer.parse_line() {
             output_line(line, stdout, &shared_state);
         }
         line_buffer.shift_remaining(); // move incomplete line to buffer start
