@@ -1,7 +1,7 @@
 use colored::Colorize;
 use serialport5::{self, SerialPort, SerialPortBuilder};
 use std::io::{self, BufWriter, Read, Write};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
 
 use crate::settings::Settings;
 use crate::state::State;
@@ -63,7 +63,7 @@ impl Buffer {
     }
 }
 
-pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
+pub fn connect_loop(settings: Settings, shared_state: State) {
     let mut first_attempt = true;
     let port_name = &settings.port;
     loop {
@@ -120,7 +120,7 @@ fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
 
 fn read_loop<W: Write>(
     mut port: SerialPort,
-    shared_state: &Arc<Mutex<State>>,
+    shared_state: &State,
     stdout: &mut W,
 ) -> ConnectionStatus {
     let mut line_buffer = Buffer::new();
@@ -147,16 +147,19 @@ fn read_loop<W: Write>(
     }
 }
 
-fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &Arc<Mutex<State>>) {
-    let mut state = shared_state.lock().unwrap();
-    if state.capture_paused {
+fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &State) {
+    // Check capture_paused atomically without holding the mutex
+    if shared_state.capture_paused.load(Ordering::Relaxed) {
         return;
     }
 
     if let Err(e) = stdout.write_all(line.as_bytes()) {
         print_error(&format!("Failed to write to stdout: {e}"));
     }
-    if let Some(log) = &mut state.active_log {
+
+    // Only lock mutex when we need to access the log
+    let mut log_state = shared_state.log_state.lock().unwrap();
+    if let Some(log) = &mut log_state.active_log {
         if log.is_enabled() {
             log.write_line(line);
             if let Err(e) = log.flush() {

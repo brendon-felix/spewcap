@@ -5,20 +5,22 @@ use rfd::FileDialog;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::log::Log;
 use crate::settings::Settings;
-use crate::state::State;
+use crate::state::{LogState, State};
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
 
-pub fn get_state(shared_state: &Arc<Mutex<State>>) -> Result<MutexGuard<'_, State>, String> {
+pub fn get_log_state(shared_state: &State) -> Result<MutexGuard<'_, LogState>, String> {
     shared_state
+        .log_state
         .lock()
-        .map_err(|e| format!("Failed to acquire lock on shared state: {e}"))
+        .map_err(|e| format!("Failed to acquire lock on log state: {e}"))
 }
 
 pub fn sleep(num_ms: u64) {
@@ -52,9 +54,9 @@ pub fn reset_ansi() {
     print!("\x1b[0m")
 }
 
-pub fn start_thread<F>(settings: Settings, state: &Arc<Mutex<State>>, task: F) -> JoinHandle<()>
+pub fn start_thread<F>(settings: Settings, state: &State, task: F) -> JoinHandle<()>
 where
-    F: Fn(Settings, Arc<Mutex<State>>) + Send + 'static,
+    F: Fn(Settings, State) + Send + 'static,
 {
     let state_clone = Arc::clone(&state);
     std::thread::spawn(move || {
@@ -113,32 +115,33 @@ pub fn print_error(message: &str) {
     print_message(full_message);
 }
 
-pub fn request_quit(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
+pub fn request_quit(settings: &Settings, shared_state: &State) {
     print_message("Quitting...");
     terminal::disable_raw_mode().unwrap_or_else(|_| {
         print_error("Failed to disable raw terminal mode");
     });
-    let mut state = shared_state.lock().unwrap();
-    let need_save = state
+    let log_state = shared_state.log_state.lock().unwrap();
+    let need_save = log_state
         .active_log
         .as_ref()
         .map_or(false, |log| log.has_unsaved_changes());
+    drop(log_state); // Release lock before potentially showing dialog
     if need_save {
         save_active_log(settings, shared_state);
     }
-    state.quit_requested = true;
+    shared_state.quit_requested.store(true, Ordering::Relaxed);
 }
-pub fn quit_requested(state: &Arc<Mutex<State>>) -> bool {
-    let state = state.lock().unwrap();
-    state.quit_requested
+pub fn quit_requested(state: &State) -> bool {
+    // Access atomic directly without locking mutex for better performance
+    state.quit_requested.load(Ordering::Relaxed)
 }
 
-pub fn start_new_log(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
-    let mut state = shared_state.lock().unwrap();
+pub fn start_new_log(settings: &Settings, shared_state: &State) {
+    let mut log_state = shared_state.log_state.lock().unwrap();
     match Log::new(settings.timestamps) {
         Ok(log) => {
             let filename = log.get_filename().to_string();
-            state.active_log = Some(log);
+            log_state.active_log = Some(log);
             print_success(&format!("Started new log file: {}", filename));
         }
         _ => print_error("Failed to create log file"),
@@ -158,9 +161,9 @@ pub fn run_file_dialog(filename: &str, directory: &Option<PathBuf>) -> Option<Pa
         .set_file_name(filename)
         .save_file()
 }
-pub fn save_active_log(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
-    let mut state = shared_state.lock().unwrap();
-    match state.active_log {
+pub fn save_active_log(settings: &Settings, shared_state: &State) {
+    let mut log_state = shared_state.log_state.lock().unwrap();
+    match log_state.active_log {
         Some(ref mut log) => {
             if log.has_unsaved_changes() {
                 match run_file_dialog(log.get_filename(), &settings.log_folder) {

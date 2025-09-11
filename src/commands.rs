@@ -1,16 +1,18 @@
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::enable_raw_mode;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::settings::Settings;
 use crate::state::State;
-use crate::utils::{self, get_state, print_error, print_message, print_separator, print_warning};
+use crate::utils::{
+    self, get_log_state, print_error, print_message, print_separator, print_warning,
+};
 
 const POLL_PERIOD: u64 = 100; // milliseconds
 
-pub fn command_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
+pub fn command_loop(settings: Settings, shared_state: State) {
     if let Err(e) = enable_raw_mode() {
         print_warning(&format!(
             "Could not enable raw mode: {e}\nSome key commands may not work properly!"
@@ -52,7 +54,7 @@ fn handle_command(
     code: KeyCode,
     kind: KeyEventKind,
     settings: &Settings,
-    shared_state: &Arc<Mutex<State>>,
+    shared_state: &State,
 ) -> Result<(), String> {
     if kind == KeyEventKind::Press {
         match code {
@@ -84,11 +86,14 @@ fn help_message() {
     print_separator();
 }
 
-fn toggle_pause_capture(shared_state: &Arc<Mutex<State>>) -> Result<(), String> {
-    let mut state = get_state(shared_state)?;
+fn toggle_pause_capture(shared_state: &State) -> Result<(), String> {
+    let current = shared_state.capture_paused.load(Ordering::Relaxed);
+    let new_value = !current;
+    shared_state
+        .capture_paused
+        .store(new_value, Ordering::Relaxed);
 
-    state.capture_paused = !state.capture_paused;
-    if state.capture_paused {
+    if new_value {
         print_message(format!("Capture {}", "paused".yellow()));
     } else {
         print_message(format!("Capture {}", "resumed".green()));
@@ -96,9 +101,9 @@ fn toggle_pause_capture(shared_state: &Arc<Mutex<State>>) -> Result<(), String> 
     Ok(())
 }
 
-fn toggle_pause_logging(shared_state: &Arc<Mutex<State>>) -> Result<(), String> {
-    let mut state = get_state(shared_state)?;
-    match state.active_log {
+fn toggle_pause_logging(shared_state: &State) -> Result<(), String> {
+    let mut log_state = get_log_state(shared_state)?;
+    match log_state.active_log {
         Some(ref mut log) => log.toggle(),
         None => utils::print_warning("No log started! Press `N` to start one"),
     }
