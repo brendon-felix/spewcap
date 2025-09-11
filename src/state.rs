@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use crate::log::Log;
+use std::sync::{Arc, Mutex};
 
 pub struct State {
     pub capture_paused: bool,
@@ -8,11 +8,9 @@ pub struct State {
 }
 
 pub fn init_state() -> Arc<Mutex<State>> {
-    Arc::new(Mutex::new(
-        State{
-            capture_paused: false,
-            active_log: None,
-            quit_requested: false,
-        }
-    ))
+    Arc::new(Mutex::new(State {
+        capture_paused: false,
+        active_log: None,
+        quit_requested: false,
+    }))
 }

@@ -1,27 +1,31 @@
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
 use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::enable_raw_mode;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use crate::state::State;
 use crate::settings::Settings;
-use crate::utils::{self, get_state, print_message, print_separator, print_warning, print_error};
+use crate::state::State;
+use crate::utils::{self, get_state, print_error, print_message, print_separator, print_warning};
 
 const POLL_PERIOD: u64 = 100; // milliseconds
 
 pub fn command_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
     if let Err(e) = enable_raw_mode() {
-        print_warning(&format!("Could not enable raw mode: {e}\nSome key commands may not work properly!"))
+        print_warning(&format!(
+            "Could not enable raw mode: {e}\nSome key commands may not work properly!"
+        ))
     }
     loop {
         let result = match poll_for_command() {
             Ok(Some((code, kind))) => {
-                if utils::quit_requested(&shared_state) { break; }
+                if utils::quit_requested(&shared_state) {
+                    break;
+                }
                 handle_command(code, kind, &settings, &shared_state)
-            },
+            }
             Ok(None) => Ok(()),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         };
         if let Err(e) = result {
             print_error(&format!("Command handler error: {e}"));
@@ -33,17 +37,23 @@ fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind)>, String> {
     let key_pressed = event::poll(Duration::from_millis(POLL_PERIOD))
         .map_err(|e| format!("Could not poll for key event: {e}"))?;
     let command = if key_pressed {
-        let event = event::read()
-            .map_err(|e| format!("Could not read key event: {e}"))?;
+        let event = event::read().map_err(|e| format!("Could not read key event: {e}"))?;
         match event {
-            Event::Key(KeyEvent {code, kind, ..}) => Some((code, kind)),
-            _ => None
+            Event::Key(KeyEvent { code, kind, .. }) => Some((code, kind)),
+            _ => None,
         }
-    } else { None };
+    } else {
+        None
+    };
     Ok(command)
 }
 
-fn handle_command(code: KeyCode, kind: KeyEventKind, settings: &Settings, shared_state: &Arc<Mutex<State>>) -> Result<(), String> {
+fn handle_command(
+    code: KeyCode,
+    kind: KeyEventKind,
+    settings: &Settings,
+    shared_state: &Arc<Mutex<State>>,
+) -> Result<(), String> {
     if kind == KeyEventKind::Press {
         match code {
             KeyCode::Char('q') => utils::request_quit(settings, shared_state),
@@ -78,8 +88,11 @@ fn toggle_pause_capture(shared_state: &Arc<Mutex<State>>) -> Result<(), String> 
     let mut state = get_state(shared_state)?;
 
     state.capture_paused = !state.capture_paused;
-    if state.capture_paused { print_message(format!("Capture {}", "paused".yellow())); }
-        else                { print_message(format!("Capture {}", "resumed".green())); }
+    if state.capture_paused {
+        print_message(format!("Capture {}", "paused".yellow()));
+    } else {
+        print_message(format!("Capture {}", "resumed".green()));
+    }
     Ok(())
 }
 
@@ -87,7 +100,7 @@ fn toggle_pause_logging(shared_state: &Arc<Mutex<State>>) -> Result<(), String> 
     let mut state = get_state(shared_state)?;
     match state.active_log {
         Some(ref mut log) => log.toggle(),
-        None => utils::print_warning("No log started! Press `N` to start one")
+        None => utils::print_warning("No log started! Press `N` to start one"),
     }
     Ok(())
 }

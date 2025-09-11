@@ -1,10 +1,10 @@
-use std::fs;
-use toml;
-use std::path::PathBuf;
-use serialport5::{available_ports, SerialPortType};
+use clap::Parser;
 use dialoguer::Select;
 use serde::Deserialize;
-use clap::Parser;
+use serialport5::{available_ports, SerialPortType};
+use std::fs;
+use std::path::PathBuf;
+use toml;
 
 use crate::utils;
 
@@ -49,7 +49,7 @@ pub struct Args {
     log_folder: Option<String>,
 
     #[arg(long)]
-    list: bool
+    list: bool,
 }
 
 #[derive(Default, Deserialize, Debug)]
@@ -73,8 +73,12 @@ impl Config {
         self.log_on_start = Some(args.log_on_start);
     }
     pub fn select_missing(&mut self) -> Result<(), String> {
-        if self.port.is_none() { self.port = Some(select_port()?); }
-        if self.baud_rate.is_none() { self.baud_rate = Some(select_baud_rate()?); }
+        if self.port.is_none() {
+            self.port = Some(select_port()?);
+        }
+        if self.baud_rate.is_none() {
+            self.baud_rate = Some(select_baud_rate()?);
+        }
         Ok(())
     }
 }
@@ -86,13 +90,22 @@ fn select_port() -> Result<String, String> {
         std::process::exit(0);
     }
     let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
-    let port_descriptions: Vec<String> = ports.iter().map(|port| {
-        let mut description = format!("{}", port.port_name);
-        if let SerialPortType::UsbPort(info) = &port.port_type {
-            description = format!("{} {}", info.manufacturer.as_deref().unwrap_or(""), info.product.as_deref().unwrap_or("")).trim().to_string();
-        }
-        description
-    }).collect();
+    let port_descriptions: Vec<String> = ports
+        .iter()
+        .map(|port| {
+            let mut description = format!("{}", port.port_name);
+            if let SerialPortType::UsbPort(info) = &port.port_type {
+                description = format!(
+                    "{} {}",
+                    info.manufacturer.as_deref().unwrap_or(""),
+                    info.product.as_deref().unwrap_or("")
+                )
+                .trim()
+                .to_string();
+            }
+            description
+        })
+        .collect();
     let selection = Select::new()
         .with_prompt("Select serial port")
         .default(0) // default is the first option
@@ -103,7 +116,9 @@ fn select_port() -> Result<String, String> {
 }
 
 fn select_baud_rate() -> Result<u32, String> {
-    let options = [4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600];
+    let options = [
+        4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
+    ];
     let selection = Select::new()
         .with_prompt("Select baud rate")
         .default(5) // default is 115200 at index 5
@@ -119,10 +134,8 @@ pub fn get_config() -> Config {
     let path_in_curr_dir = curr_dir.join("spewcap_config.toml");
     let exe_dir = utils::get_exe_directory().unwrap_or(utils::get_curr_directory());
     let path_in_exe_dir = exe_dir.join("spewcap_config.toml");
-    let mut config = Config::load(path_in_curr_dir).unwrap_or(
-        Config::load(path_in_exe_dir)
-            .unwrap_or(Config::default())
-    );
+    let mut config = Config::load(path_in_curr_dir)
+        .unwrap_or(Config::load(path_in_exe_dir).unwrap_or(Config::default()));
     config.use_args(args);
     config
 }
@@ -131,8 +144,7 @@ pub fn get_settings(config: &Config) -> Result<Settings, String> {
     let port = config.port.clone().ok_or(format!("Could not set port"))?;
     let baud_rate = config.baud_rate.ok_or(format!("Could not set baud rate"))?;
     let timestamps = config.timestamps.unwrap_or(false);
-    let log_folder = config.log_folder.as_ref()
-        .map(|f| PathBuf::from(f));
+    let log_folder = config.log_folder.as_ref().map(|f| PathBuf::from(f));
     Ok(Settings {
         port,
         baud_rate,

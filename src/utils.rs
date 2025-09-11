@@ -1,22 +1,24 @@
-use std::time::Duration;
+use colored::Colorize;
+use crossterm::terminal;
+use regex::Regex;
+use rfd::FileDialog;
 use std::fmt::Display;
 use std::ops::Deref;
-use regex::Regex;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::thread::JoinHandle;
-use std::path::PathBuf;
-use colored::Colorize;
-use rfd::FileDialog;
-use crossterm::terminal;
+use std::time::Duration;
 
-use crate::state::State;
-use crate::settings::Settings;
 use crate::log::Log;
+use crate::settings::Settings;
+use crate::state::State;
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
 
-pub fn get_state(shared_state: &Arc<Mutex<State>>) -> Result<MutexGuard<State>, String> {
-    shared_state.lock().map_err(|e| format!("Failed to acquire lock on shared state: {e}"))
+pub fn get_state(shared_state: &Arc<Mutex<State>>) -> Result<MutexGuard<'_, State>, String> {
+    shared_state
+        .lock()
+        .map_err(|e| format!("Failed to acquire lock on shared state: {e}"))
 }
 
 pub fn sleep(num_ms: u64) {
@@ -24,19 +26,23 @@ pub fn sleep(num_ms: u64) {
 }
 
 pub fn clear_console() {
-    let _ = std::process::Command::new("cmd").args(["/c", "cls"]).status();
+    let _ = std::process::Command::new("cmd")
+        .args(["/c", "cls"])
+        .status();
 }
 
 pub fn print_welcome() {
-    println!(r"
- __ _  __    __ _  _ 
+    println!(
+        r"
+ __ _  __    __ _  _
 (_ |_)|_ | |/  |_||_)
-__)|  |__|^|\__| ||  
+__)|  |__|^|\__| ||
 
 ==================================
 Press `H` for help and `Q` to quit
 ==================================
-");
+"
+    );
 }
 
 pub fn ansi_regex() -> Regex {
@@ -47,9 +53,9 @@ pub fn reset_ansi() {
 }
 
 pub fn start_thread<F>(settings: Settings, state: &Arc<Mutex<State>>, task: F) -> JoinHandle<()>
-  where
+where
     F: Fn(Settings, Arc<Mutex<State>>) + Send + 'static,
-    {
+{
     let state_clone = Arc::clone(&state);
     std::thread::spawn(move || {
         task(settings, state_clone);
@@ -57,7 +63,7 @@ pub fn start_thread<F>(settings: Settings, state: &Arc<Mutex<State>>, task: F) -
 }
 
 // pub fn print_separator<T: ToString + Deref<Target = str> + Display>(text: T) {
-    
+
 //     if let Some((width, _)) = term_size::dimensions() {
 //         let re = ansi_regex();
 //         let length = re.replace_all(&text, "").len();
@@ -79,7 +85,6 @@ pub fn start_thread<F>(settings: Settings, state: &Arc<Mutex<State>>, task: F) -
 //         println!("----------------------- {} -----------------------", text);
 //     }
 // }
-
 
 pub fn print_separator() {
     reset_ansi();
@@ -108,14 +113,16 @@ pub fn print_error(message: &str) {
     print_message(full_message);
 }
 
-
 pub fn request_quit(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
     print_message("Quitting...");
     terminal::disable_raw_mode().unwrap_or_else(|_| {
         print_error("Failed to disable raw terminal mode");
     });
     let mut state = shared_state.lock().unwrap();
-    let need_save = state.active_log.as_ref().map_or(false, |log| log.unsaved_changes);
+    let need_save = state
+        .active_log
+        .as_ref()
+        .map_or(false, |log| log.has_unsaved_changes());
     if need_save {
         save_active_log(settings, shared_state);
     }
@@ -130,10 +137,11 @@ pub fn start_new_log(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
     let mut state = shared_state.lock().unwrap();
     match Log::new(settings.timestamps) {
         Ok(log) => {
+            let filename = log.get_filename().to_string();
             state.active_log = Some(log);
-            print_success(&format!("Started new log file: {}", state.active_log.as_ref().unwrap().filename));
-        },
-        _ => print_error("Failed to create log file")
+            print_success(&format!("Started new log file: {}", filename));
+        }
+        _ => print_error("Failed to create log file"),
     }
 }
 pub fn run_file_dialog(filename: &str, directory: &Option<PathBuf>) -> Option<PathBuf> {
@@ -154,18 +162,18 @@ pub fn save_active_log(settings: &Settings, shared_state: &Arc<Mutex<State>>) {
     let mut state = shared_state.lock().unwrap();
     match state.active_log {
         Some(ref mut log) => {
-            if log.unsaved_changes {
-                match run_file_dialog(&log.filename, &settings.log_folder) {
+            if log.has_unsaved_changes() {
+                match run_file_dialog(log.get_filename(), &settings.log_folder) {
                     Some(log_path) => {
                         log.save_as(&log_path);
                         print_success(&format!("Saved log to {}", log_path.display()));
-                    },
+                    }
                     None => print_warning("Save operation was canceled!"),
                 }
             } else {
                 print_warning("No unsaved changes to save!");
             }
-        },
+        }
         None => print_warning("No log started! Press `L` to start one"),
     }
 }

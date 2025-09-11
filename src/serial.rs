@@ -1,11 +1,11 @@
-use std::sync::{Arc, Mutex};
+use colored::Colorize;
 use serialport5::{self, SerialPort, SerialPortBuilder};
 use std::io::{self, BufWriter, Read, Write};
-use colored::Colorize;
+use std::sync::{Arc, Mutex};
 
 use crate::settings::Settings;
 use crate::state::State;
-use crate::utils::{quit_requested, print_message, print_error, sleep};
+use crate::utils::{print_error, print_message, quit_requested, sleep};
 
 pub enum ConnectionStatus {
     Connected,
@@ -29,11 +29,14 @@ impl Buffer {
     fn write(&mut self, data_buffer: &[u8], data_size: usize) {
         let remaining_buffer_space = self.buffer.len() - self.index;
         let num_bytes = remaining_buffer_space.min(data_size); // only use the remaining space available
-        self.buffer[self.index.. self.index + num_bytes].copy_from_slice(&data_buffer[..num_bytes]);
+        self.buffer[self.index..self.index + num_bytes].copy_from_slice(&data_buffer[..num_bytes]);
         self.index += num_bytes;
     }
     fn next_line(&mut self) -> Option<&str> {
-        if let Some(newline_index) = self.buffer[self.line_index..self.index].iter().position(|&b| b == b'\n') {
+        if let Some(newline_index) = self.buffer[self.line_index..self.index]
+            .iter()
+            .position(|&b| b == b'\n')
+        {
             let line_end = self.line_index + newline_index + 1;
             let line_bytes = &self.buffer[self.line_index..line_end];
             self.line_index = line_end;
@@ -43,10 +46,10 @@ impl Buffer {
                     let valid_bytes = &line_bytes[..e.valid_up_to()];
                     match std::str::from_utf8(valid_bytes) {
                         Ok(valid_line) => Some(valid_line),
-                        Err(_) => None
+                        Err(_) => None,
                     }
                 }
-                Err(_) => None
+                Err(_) => None,
             }
         } else {
             None
@@ -64,7 +67,9 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
     let mut first_attempt = true;
     let port_name = &settings.port;
     loop {
-        if quit_requested(&shared_state) { break; }
+        if quit_requested(&shared_state) {
+            break;
+        }
         match open_serial_port(port_name, settings.baud_rate) {
             Some(port) => {
                 print_status(port_name, ConnectionStatus::Connected);
@@ -72,10 +77,14 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
                 let status = read_loop(port, &shared_state, &mut stdout);
                 match status {
                     ConnectionStatus::Connected => break, // still connected means we are quitting
-                    ConnectionStatus::Disconnected => print_status(port_name, ConnectionStatus::Disconnected),
-                    ConnectionStatus::NotConnected => print_status(port_name, ConnectionStatus::NotConnected),
+                    ConnectionStatus::Disconnected => {
+                        print_status(port_name, ConnectionStatus::Disconnected)
+                    }
+                    ConnectionStatus::NotConnected => {
+                        print_status(port_name, ConnectionStatus::NotConnected)
+                    }
                 }
-            },
+            }
             None => {
                 if first_attempt {
                     print_status(port_name, ConnectionStatus::NotConnected);
@@ -89,9 +98,15 @@ pub fn connect_loop(settings: Settings, shared_state: Arc<Mutex<State>>) {
 
 fn print_status(port_name: &str, status: ConnectionStatus) {
     match status {
-        ConnectionStatus::Connected => print_message(format!("{} {}", port_name, "connected".green())),
-        ConnectionStatus::NotConnected => print_message(format!("{} {}", port_name, "not connected".yellow())),
-        ConnectionStatus::Disconnected => print_message(format!("{} {}", port_name, "disconnected".red())),
+        ConnectionStatus::Connected => {
+            print_message(format!("{} {}", port_name, "connected".green()))
+        }
+        ConnectionStatus::NotConnected => {
+            print_message(format!("{} {}", port_name, "not connected".yellow()))
+        }
+        ConnectionStatus::Disconnected => {
+            print_message(format!("{} {}", port_name, "disconnected".red()))
+        }
     }
 }
 
@@ -99,14 +114,21 @@ fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
     let baud_rate = baud_rate;
     SerialPortBuilder::new()
         .baud_rate(baud_rate)
-        .open(port).ok()
+        .open(port)
+        .ok()
 }
 
-fn read_loop<W: Write>(mut port: SerialPort, shared_state: &Arc<Mutex<State>>, stdout: &mut W) -> ConnectionStatus {
+fn read_loop<W: Write>(
+    mut port: SerialPort,
+    shared_state: &Arc<Mutex<State>>,
+    stdout: &mut W,
+) -> ConnectionStatus {
     let mut line_buffer = Buffer::new();
     let mut data_buffer = [0; 512];
     loop {
-        if quit_requested(&shared_state) { return ConnectionStatus::Connected; }
+        if quit_requested(&shared_state) {
+            return ConnectionStatus::Connected;
+        }
         match port.bytes_to_read() {
             Ok(0) => sleep(100),
             Ok(_) => match port.read(&mut data_buffer) {
@@ -127,14 +149,19 @@ fn read_loop<W: Write>(mut port: SerialPort, shared_state: &Arc<Mutex<State>>, s
 
 fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &Arc<Mutex<State>>) {
     let mut state = shared_state.lock().unwrap();
-    if state.capture_paused { return; }
+    if state.capture_paused {
+        return;
+    }
 
     if let Err(e) = stdout.write_all(line.as_bytes()) {
         print_error(&format!("Failed to write to stdout: {e}"));
     }
     if let Some(log) = &mut state.active_log {
-        if log.enabled {
+        if log.is_enabled() {
             log.write_line(line);
+            if let Err(e) = log.flush() {
+                print_error(&format!("Failed to flush log: {e}"));
+            }
         }
     }
 }
