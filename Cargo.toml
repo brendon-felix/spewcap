@@ -15,3 +15,13 @@ colored = "3.0.0"
 term_size = "0.3.2"
 rfd = "0.15.2"
 dialoguer = "0.11.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+opt-level = 1  # Some optimization in dev mode for better testing

@@ -120,19 +120,24 @@ pub fn request_quit(settings: &Settings, shared_state: &State) {
     terminal::disable_raw_mode().unwrap_or_else(|_| {
         print_error("Failed to disable raw terminal mode");
     });
-    let log_state = shared_state.log_state.lock().unwrap();
+    let mut log_state = shared_state.log_state.lock().unwrap();
     let need_save = log_state
         .active_log
         .as_ref()
         .map_or(false, |log| log.has_unsaved_changes());
-    drop(log_state); // Release lock before potentially showing dialog
+
+    // flush any remaining data before quitting
+    if let Some(log) = &mut log_state.active_log {
+        let _ = log.force_flush();
+    }
+    drop(log_state);
+
     if need_save {
         save_active_log(settings, shared_state);
     }
     shared_state.quit_requested.store(true, Ordering::Relaxed);
 }
 pub fn quit_requested(state: &State) -> bool {
-    // Access atomic directly without locking mutex for better performance
     state.quit_requested.load(Ordering::Relaxed)
 }
 
@@ -165,6 +170,7 @@ pub fn save_active_log(settings: &Settings, shared_state: &State) {
     let mut log_state = shared_state.log_state.lock().unwrap();
     match log_state.active_log {
         Some(ref mut log) => {
+            let _ = log.force_flush();
             if log.has_unsaved_changes() {
                 match run_file_dialog(log.get_filename(), &settings.log_folder) {
                     Some(log_path) => {

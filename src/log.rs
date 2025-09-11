@@ -9,6 +9,8 @@ use std::{fs::File, io::BufWriter};
 
 use crate::utils::{ansi_regex, print_message};
 
+const FLUSH_INTERVAL: usize = 10;
+
 pub struct Log {
     // pub file: File,
     writer: BufWriter<File>,
@@ -19,13 +21,17 @@ pub struct Log {
     prepend_timestamps: bool,
     ansi_regex: Regex,
     start_time: Instant,
+    // Performance optimizations
+    timestamp_buffer: String, // Reuse buffer for timestamps
+    line_buffer: String,      // Reuse buffer for line processing
+    flush_counter: usize,     // Batch flushes
 }
 impl Log {
     pub fn new(prepend_timestamps: bool) -> Result<Self, std::io::Error> {
         let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
         let file_path = PathBuf::from(&filename);
         let file = File::create(&file_path)?;
-        let writer = BufWriter::new(file);
+        let writer = BufWriter::with_capacity(8192, file); // Larger buffer
         let ansi_regex = ansi_regex();
         let start_time = Instant::now();
         Ok(Log {
@@ -38,6 +44,9 @@ impl Log {
             prepend_timestamps,
             ansi_regex,
             start_time,
+            timestamp_buffer: String::with_capacity(32),
+            line_buffer: String::with_capacity(512),
+            flush_counter: 0,
         })
     }
 
@@ -65,18 +74,38 @@ impl Log {
     }
 
     pub fn write_line(&mut self, raw_line: &str) {
-        let mut line = self.ansi_regex.replace_all(raw_line, "").to_string();
-        if self.prepend_timestamps {
-            let timestamp = create_timestamp(self.start_time.elapsed());
-            line = format!("[{}] {}", timestamp, line);
+        self.line_buffer.clear();
+
+        // Avoid regex if no ANSI codes detected (performance optimization)
+        if raw_line.contains('\x1b') {
+            self.line_buffer
+                .push_str(&self.ansi_regex.replace_all(raw_line, ""));
+        } else {
+            self.line_buffer.push_str(raw_line);
         }
+
+        if self.prepend_timestamps {
+            self.create_timestamp_in_buffer(self.start_time.elapsed());
+            self.line_buffer
+                .insert_str(0, &format!("[{}] ", self.timestamp_buffer));
+        }
+
         self.writer
-            .write_all(line.as_bytes())
+            .write_all(self.line_buffer.as_bytes())
             .expect("Failed to write to log");
+
         self.unsaved_changes = true;
+        self.flush_counter += 1;
+
+        // Batch flush for better performance
+        if self.flush_counter >= FLUSH_INTERVAL {
+            let _ = self.writer.flush();
+            self.flush_counter = 0;
+        }
     }
 
-    pub fn flush(&mut self) -> std::io::Result<()> {
+    pub fn force_flush(&mut self) -> std::io::Result<()> {
+        self.flush_counter = 0;
         self.writer.flush()
     }
 
@@ -89,14 +118,21 @@ impl Log {
             Err(e) => eprintln!("Error saving file: {}", e),
         }
     }
-}
 
-fn create_timestamp(duration: Duration) -> String {
-    let total_millis = duration.as_millis();
-    let hours = total_millis / 3_600_000;
-    let minutes = (total_millis % 3_600_000) / 60_000;
-    let seconds = (total_millis % 60_000) / 1_000;
-    let millis = total_millis % 1_000;
+    fn create_timestamp_in_buffer(&mut self, duration: Duration) {
+        self.timestamp_buffer.clear();
+        let total_millis = duration.as_millis();
+        let hours = total_millis / 3_600_000;
+        let minutes = (total_millis % 3_600_000) / 60_000;
+        let seconds = (total_millis % 60_000) / 1_000;
+        let millis = total_millis % 1_000;
 
-    format!("{:02}:{:02}:{:02}:{:03}ms", hours, minutes, seconds, millis)
+        use std::fmt::Write;
+        write!(
+            self.timestamp_buffer,
+            "{:02}:{:02}:{:02}:{:03}ms",
+            hours, minutes, seconds, millis
+        )
+        .expect("Failed to write timestamp");
+    }
 }

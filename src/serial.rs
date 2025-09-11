@@ -14,23 +14,25 @@ pub enum ConnectionStatus {
 }
 
 struct Buffer {
-    buffer: [u8; 1024],
+    buffer: Vec<u8>,
     index: usize,
     line_index: usize,
 }
 impl Buffer {
     fn new() -> Self {
         Buffer {
-            buffer: [0; 1024],
+            buffer: Vec::with_capacity(8192),
             index: 0,
             line_index: 0,
         }
     }
     fn write(&mut self, data_buffer: &[u8], data_size: usize) {
-        let remaining_buffer_space = self.buffer.len() - self.index;
-        let num_bytes = remaining_buffer_space.min(data_size); // only use the remaining space available
-        self.buffer[self.index..self.index + num_bytes].copy_from_slice(&data_buffer[..num_bytes]);
-        self.index += num_bytes;
+        if self.index + data_size > self.buffer.len() {
+            self.buffer.resize(self.index + data_size, 0);
+        }
+
+        self.buffer[self.index..self.index + data_size].copy_from_slice(&data_buffer[..data_size]);
+        self.index += data_size;
     }
     fn next_line(&mut self) -> Option<&str> {
         if let Some(newline_index) = self.buffer[self.line_index..self.index]
@@ -57,9 +59,15 @@ impl Buffer {
     }
     fn shift_remaining(&mut self) {
         let remaining_bytes = self.index - self.line_index;
-        self.buffer.copy_within(self.line_index..self.index, 0);
+        if remaining_bytes > 0 && self.line_index > 0 {
+            self.buffer.copy_within(self.line_index..self.index, 0);
+        }
         self.line_index = 0;
         self.index = remaining_bytes;
+
+        if self.buffer.capacity() > 16384 && remaining_bytes < 4096 {
+            self.buffer.shrink_to(8192);
+        }
     }
 }
 
@@ -124,31 +132,41 @@ fn read_loop<W: Write>(
     stdout: &mut W,
 ) -> ConnectionStatus {
     let mut line_buffer = Buffer::new();
-    let mut data_buffer = [0; 512];
+    let mut data_buffer = [0; 2048];
     loop {
         if quit_requested(&shared_state) {
             return ConnectionStatus::Connected;
         }
-        match port.bytes_to_read() {
-            Ok(0) => sleep(100),
-            Ok(_) => match port.read(&mut data_buffer) {
-                Ok(data_size) => line_buffer.write(&data_buffer, data_size),
-                _ => return ConnectionStatus::Disconnected,
-            },
-            _ => return ConnectionStatus::Disconnected,
-        }
-        while let Some(line) = line_buffer.next_line() {
-            output_line(line, stdout, &shared_state);
-        }
-        line_buffer.shift_remaining(); // move incomplete line to buffer start
-        if let Err(e) = stdout.flush() {
-            print_error(&format!("Failed to flush stdout: {e}"));
+
+        match port.read(&mut data_buffer) {
+            Ok(0) => sleep(10),
+            Ok(data_size) => {
+                line_buffer.write(&data_buffer, data_size);
+                let mut lines_processed = 0;
+                while let Some(line) = line_buffer.next_line() {
+                    output_line(line, stdout, &shared_state);
+                    lines_processed += 1;
+                    // yield occasionally for very high throughput
+                    if lines_processed % 100 == 0 {
+                        if let Err(e) = stdout.flush() {
+                            print_error(&format!("Failed to flush stdout: {e}"));
+                        }
+                        std::thread::yield_now();
+                    }
+                }
+                line_buffer.shift_remaining();
+                if lines_processed > 0 {
+                    if let Err(e) = stdout.flush() {
+                        print_error(&format!("Failed to flush stdout: {e}"));
+                    }
+                }
+            }
+            Err(_) => return ConnectionStatus::Disconnected,
         }
     }
 }
 
 fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &State) {
-    // Check capture_paused atomically without holding the mutex
     if shared_state.capture_paused.load(Ordering::Relaxed) {
         return;
     }
@@ -157,14 +175,10 @@ fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &State) {
         print_error(&format!("Failed to write to stdout: {e}"));
     }
 
-    // Only lock mutex when we need to access the log
     let mut log_state = shared_state.log_state.lock().unwrap();
     if let Some(log) = &mut log_state.active_log {
         if log.is_enabled() {
             log.write_line(line);
-            if let Err(e) = log.flush() {
-                print_error(&format!("Failed to flush log: {e}"));
-            }
         }
     }
 }
