@@ -26,11 +26,14 @@ pub enum SpewcapError {
     #[error("Terminal error: {0}")]
     Terminal(String),
     
-    // #[error("Invalid baud rate: {0}")]
-    // InvalidBaudRate(u32),
+    #[error("Invalid baud rate: {0}")]
+    InvalidBaudRate(u32),
     
-    // #[error("Invalid port: {0}")]
-    // InvalidPort(String),
+    #[error("Invalid port: {0}")]
+    InvalidPort(String),
+    
+    #[error("Invalid file path: {0}")]
+    InvalidFilePath(String),
     
     #[error("Log error: {0}")]
     Log(String),

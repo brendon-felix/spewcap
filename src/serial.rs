@@ -8,6 +8,7 @@ use crate::settings::Settings;
 use crate::state::State;
 use crate::utils::{get_log_state, print_error, print_message, quit_requested, sleep_ms};
 use crate::error::Result;
+use crate::validation;
 
 pub enum ConnectionStatus {
     Connected,
@@ -122,7 +123,17 @@ fn print_status(port_name: &str, status: ConnectionStatus) {
 }
 
 fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
-    let baud_rate = baud_rate;
+    // Validate inputs before attempting to open the port
+    if let Err(e) = validation::validate_port_name(port) {
+        print_error(&format!("Invalid port: {}", e));
+        return None;
+    }
+    
+    if let Err(e) = validation::validate_baud_rate(baud_rate) {
+        print_error(&format!("Invalid baud rate: {}", e));
+        return None;
+    }
+    
     SerialPortBuilder::new()
         .baud_rate(baud_rate)
         .read_timeout(Some(Duration::from_millis(100)))  // 100ms timeout

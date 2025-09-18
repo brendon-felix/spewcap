@@ -13,8 +13,16 @@ mod serial;
 mod settings;
 mod state;
 mod utils;
+mod validation;
 
-fn main() -> error::Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    }
+}
+
+fn run() -> error::Result<()> {
     let args = settings::Args::parse();
     
     if args.list {
@@ -23,7 +31,7 @@ fn main() -> error::Result<()> {
     }
     
     // utils::enter_alternate_screen()?;
-    let mut config = settings::get_config(args);
+    let mut config = settings::get_config(args)?;
     if !config.disable_welcome.unwrap_or(false) {
         utils::print_welcome();
     }

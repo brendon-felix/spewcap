@@ -213,8 +213,10 @@ pub fn save_active_log(settings: &Settings, shared_state: &State) {
             if log.has_unsaved_changes() {
                 match run_file_dialog(log.get_filename(), &settings.log_folder) {
                     Some(log_path) => {
-                        log.save_as(&log_path);
-                        print_success(&format!("Saved log to {}", log_path.display()));
+                        match log.save_as(&log_path) {
+                            Ok(()) => print_success(&format!("Saved log to {}", log_path.display())),
+                            Err(e) => print_error(&format!("Failed to save log: {}", e)),
+                        }
                     }
                     None => print_warning("Save operation was canceled!"),
                 }

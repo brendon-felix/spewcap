@@ -8,6 +8,8 @@ use std::time::{Duration, Instant};
 use std::{fs::File, io::BufWriter};
 
 use crate::utils::{ansi_regex, print_message};
+use crate::validation;
+use crate::error::Result;
 
 const FLUSH_INTERVAL: usize = 10;
 
@@ -27,7 +29,7 @@ pub struct Log {
     flush_counter: usize,     // Batch flushes
 }
 impl Log {
-    pub fn new(prepend_timestamps: bool) -> Result<Self, std::io::Error> {
+    pub fn new(prepend_timestamps: bool) -> std::result::Result<Self, std::io::Error> {
         let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
         let file_path = PathBuf::from(&filename);
         let file = File::create(&file_path)?;
@@ -109,13 +111,21 @@ impl Log {
         self.writer.flush()
     }
 
-    pub fn save_as(&mut self, new_file_path: &PathBuf) {
+    pub fn save_as(&mut self, new_file_path: &PathBuf) -> Result<()> {
+        // Validate the file path before attempting to save
+        let path_str = new_file_path.to_string_lossy();
+        validation::validate_file_path(&path_str)?;
+        
         match copy(&self.file_path, new_file_path) {
             Ok(_) => {
                 self.unsaved_changes = false;
-                println!("Saved to {}", new_file_path.display())
+                println!("Saved to {}", new_file_path.display());
+                Ok(())
             }
-            Err(e) => eprintln!("Error saving file: {}", e),
+            Err(e) => {
+                eprintln!("Error saving file: {}", e);
+                Err(crate::error::SpewcapError::Io(e))
+            }
         }
     }
 

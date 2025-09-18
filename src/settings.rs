@@ -8,16 +8,7 @@ use toml;
 
 use crate::utils;
 use crate::error::{Result, SpewcapError};
-
-macro_rules! merge_config {
-    ($config:expr, $args:expr, $( $field:ident ),*) => {
-        $(
-            if let Some(value) = $args.$field {
-                $config.$field = Some(value);
-            }
-        )*
-    }
-}
+use crate::validation;
 
 #[derive(Clone, Debug)]
 pub struct Settings {
@@ -68,10 +59,26 @@ impl Config {
         let toml_str = fs::read_to_string(file_path).ok()?;
         toml::from_str(&toml_str).ok()?
     }
-    fn use_args(&mut self, args: Args) {
-        merge_config!(self, args, port, baud_rate, log_folder);
+    fn use_args(&mut self, args: Args) -> Result<()> {
+        // Validate arguments before setting them
+        if let Some(port) = &args.port {
+            validation::validate_port_name(port)?;
+            self.port = Some(port.clone());
+        }
+        
+        if let Some(baud_rate) = args.baud_rate {
+            validation::validate_baud_rate(baud_rate)?;
+            self.baud_rate = Some(baud_rate);
+        }
+        
+        if let Some(log_folder) = &args.log_folder {
+            validation::validate_directory_path(log_folder)?;
+            self.log_folder = Some(log_folder.clone());
+        }
+        
         self.timestamps = Some(args.timestamps);
         self.log_on_start = Some(args.log_on_start);
+        Ok(())
     }
     pub fn select_missing(&mut self) -> Result<()> {
         if self.port.is_none() {
@@ -128,25 +135,36 @@ fn select_baud_rate() -> Result<u32> {
     Ok(options[selection])
 }
 
-pub fn get_config(args: Args) -> Config {
+pub fn get_config(args: Args) -> Result<Config> {
     let curr_dir = utils::get_curr_directory();
     let path_in_curr_dir = curr_dir.join("spewcap_config.toml");
     let exe_dir = utils::get_exe_directory().unwrap_or(utils::get_curr_directory());
     let path_in_exe_dir = exe_dir.join("spewcap_config.toml");
     let mut config = Config::load(path_in_curr_dir)
         .unwrap_or(Config::load(path_in_exe_dir).unwrap_or(Config::default()));
-    config.use_args(args);
-    config
+    config.use_args(args)?;
+    Ok(config)
 }
 
 pub fn get_settings(config: &Config) -> Result<Settings> {
     let port = config.port.clone().ok_or_else(|| SpewcapError::Settings("Could not set port".to_string()))?;
     let baud_rate = config.baud_rate.ok_or_else(|| SpewcapError::Settings("Could not set baud rate".to_string()))?;
+    
+    let validated_port = validation::validate_port_name(&port)?;
+    let validated_baud_rate = validation::validate_baud_rate(baud_rate)?;
+    
     let timestamps = config.timestamps.unwrap_or(false);
-    let log_folder = config.log_folder.as_ref().map(|f| PathBuf::from(f));
+    let log_folder = match &config.log_folder {
+        Some(folder_str) => {
+            let validated_folder = validation::validate_directory_path(folder_str)?;
+            Some(PathBuf::from(validated_folder))
+        }
+        None => None,
+    };
+    
     Ok(Settings {
-        port,
-        baud_rate,
+        port: validated_port,
+        baud_rate: validated_baud_rate,
         timestamps,
         log_folder,
     })
