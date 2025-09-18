@@ -141,7 +141,14 @@ pub fn request_quit(settings: &Settings, shared_state: &State) {
     terminal::disable_raw_mode().unwrap_or_else(|_| {
         print_error("Failed to disable raw terminal mode");
     });
-    let mut log_state = shared_state.log_state.lock().unwrap();
+    let mut log_state = match get_log_state(shared_state) {
+        Ok(state) => state,
+        Err(e) => {
+            print_error(&format!("Failed to acquire lock on log state during quit: {e}"));
+            shared_state.quit_requested.store(true, Ordering::Relaxed);
+            return;
+        }
+    };
     let need_save = log_state
         .active_log
         .as_ref()
@@ -193,7 +200,13 @@ pub fn run_file_dialog(filename: &str, directory: &Option<PathBuf>) -> Option<Pa
         .save_file()
 }
 pub fn save_active_log(settings: &Settings, shared_state: &State) {
-    let mut log_state = shared_state.log_state.lock().unwrap();
+    let mut log_state = match get_log_state(shared_state) {
+        Ok(state) => state,
+        Err(e) => {
+            print_error(&format!("Failed to acquire lock on log state during save: {e}"));
+            return;
+        }
+    };
     match log_state.active_log {
         Some(ref mut log) => {
             let _ = log.force_flush();

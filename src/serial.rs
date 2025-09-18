@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crate::settings::Settings;
 use crate::state::State;
-use crate::utils::{print_error, print_message, quit_requested, sleep_ms};
+use crate::utils::{get_log_state, print_error, print_message, quit_requested, sleep_ms};
 use crate::error::Result;
 
 pub enum ConnectionStatus {
@@ -184,7 +184,13 @@ fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &State) {
         print_error(&format!("Failed to write to stdout: {e}"));
     }
 
-    let mut log_state = shared_state.log_state.lock().unwrap();
+    let mut log_state = match get_log_state(shared_state) {
+        Ok(state) => state,
+        Err(e) => {
+            print_error(&format!("Failed to acquire lock on log state during serial output: {e}"));
+            return;
+        }
+    };
     if let Some(log) = &mut log_state.active_log {
         if log.is_enabled() {
             log.write_line(line);
