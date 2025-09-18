@@ -7,6 +7,7 @@ use std::time::Duration;
 use crate::settings::Settings;
 use crate::state::State;
 use crate::utils::{print_error, print_message, quit_requested, sleep_ms};
+use crate::error::Result;
 
 pub enum ConnectionStatus {
     Connected,
@@ -72,7 +73,7 @@ impl Buffer {
     }
 }
 
-pub fn connect_loop(settings: Settings, shared_state: State) {
+pub fn connect_loop(settings: Settings, shared_state: State) -> Result<()> {
     let mut first_attempt = true;
     let port_name = &settings.port;
     loop {
@@ -103,6 +104,7 @@ pub fn connect_loop(settings: Settings, shared_state: State) {
         }
         first_attempt = false;
     }
+    Ok(())
 }
 
 fn print_status(port_name: &str, status: ConnectionStatus) {

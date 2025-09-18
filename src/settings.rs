@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use toml;
 
 use crate::utils;
+use crate::error::{Result, SpewcapError};
 
 macro_rules! merge_config {
     ($config:expr, $args:expr, $( $field:ident ),*) => {
@@ -72,7 +73,7 @@ impl Config {
         self.timestamps = Some(args.timestamps);
         self.log_on_start = Some(args.log_on_start);
     }
-    pub fn select_missing(&mut self) -> Result<(), String> {
+    pub fn select_missing(&mut self) -> Result<()> {
         if self.port.is_none() {
             self.port = Some(select_port()?);
         }
@@ -83,11 +84,10 @@ impl Config {
     }
 }
 
-fn select_port() -> Result<String, String> {
-    let ports = available_ports().expect("Could not find available ports!");
+fn select_port() -> Result<String> {
+    let ports = available_ports().map_err(|e| SpewcapError::SerialPort(e))?;
     if ports.is_empty() {
-        eprintln!("No serial ports found!");
-        std::process::exit(0);
+        return Err(SpewcapError::NoPortsFound);
     }
     let port_names: Vec<&str> = ports.iter().map(|port| port.port_name.as_str()).collect();
     let port_descriptions: Vec<String> = ports
@@ -111,11 +111,11 @@ fn select_port() -> Result<String, String> {
         .default(0) // default is the first option
         .items(&port_descriptions)
         .interact()
-        .map_err(|e| format!("No serial port selected: {e}"))?;
+        .map_err(|e| SpewcapError::Dialog(format!("No serial port selected: {e}")))?;
     Ok(port_names[selection].to_string())
 }
 
-fn select_baud_rate() -> Result<u32, String> {
+fn select_baud_rate() -> Result<u32> {
     let options = [
         4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
     ];
@@ -124,7 +124,7 @@ fn select_baud_rate() -> Result<u32, String> {
         .default(5) // default is 115200 at index 5
         .items(&options)
         .interact()
-        .map_err(|e| format!("No baud rate selected: {e}"))?;
+        .map_err(|e| SpewcapError::Dialog(format!("No baud rate selected: {e}")))?;
     Ok(options[selection])
 }
 
@@ -139,9 +139,9 @@ pub fn get_config(args: Args) -> Config {
     config
 }
 
-pub fn get_settings(config: &Config) -> Result<Settings, String> {
-    let port = config.port.clone().ok_or(format!("Could not set port"))?;
-    let baud_rate = config.baud_rate.ok_or(format!("Could not set baud rate"))?;
+pub fn get_settings(config: &Config) -> Result<Settings> {
+    let port = config.port.clone().ok_or_else(|| SpewcapError::Settings("Could not set port".to_string()))?;
+    let baud_rate = config.baud_rate.ok_or_else(|| SpewcapError::Settings("Could not set baud rate".to_string()))?;
     let timestamps = config.timestamps.unwrap_or(false);
     let log_folder = config.log_folder.as_ref().map(|f| PathBuf::from(f));
     Ok(Settings {

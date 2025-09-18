@@ -1,7 +1,7 @@
 use colored::Colorize;
 use crossterm::terminal;
 use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+// use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use regex::Regex;
 use rfd::FileDialog;
 use serialport5::{available_ports, SerialPortType};
@@ -16,34 +16,34 @@ use std::time::Duration;
 use crate::log::Log;
 use crate::settings::Settings;
 use crate::state::{LogState, State};
+use crate::error::{Result, SpewcapError};
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
 
-pub fn get_log_state(shared_state: &State) -> Result<MutexGuard<'_, LogState>, String> {
+pub fn get_log_state(shared_state: &State) -> Result<MutexGuard<'_, LogState>> {
     shared_state
         .log_state
         .lock()
-        .map_err(|e| format!("Failed to acquire lock on log state: {e}"))
+        .map_err(|e| SpewcapError::Log(format!("Failed to acquire lock on log state: {e}")))
 }
 
 pub fn sleep_ms(num_ms: u64) {
     std::thread::sleep(Duration::from_millis(num_ms));
 }
 
-pub fn enter_alternate_screen() {
-    if let Err(e) = execute!(std::io::stdout(), EnterAlternateScreen) {
-        print_error(&format!("Failed to enter alternate screen: {}", e));
-    }
-    if let Err(e) = execute!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0)) {
-        print_error(&format!("Failed to move cursor to top: {}", e));
-    }
-}
+// pub fn enter_alternate_screen() -> Result<()> {
+//     execute!(std::io::stdout(), EnterAlternateScreen)
+//         .map_err(|e| SpewcapError::Terminal(format!("Failed to enter alternate screen: {}", e)))?;
+//     execute!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0))
+//         .map_err(|e| SpewcapError::Terminal(format!("Failed to move cursor to top: {}", e)))?;
+//     Ok(())
+// }
 
-pub fn leave_alternate_screen() {
-    if let Err(e) = execute!(std::io::stdout(), LeaveAlternateScreen) {
-        print_error(&format!("Failed to leave alternate screen: {}", e));
-    }
-}
+// pub fn leave_alternate_screen() -> Result<()> {
+//     execute!(std::io::stdout(), LeaveAlternateScreen)
+//         .map_err(|e| SpewcapError::Terminal(format!("Failed to leave alternate screen: {}", e)))?;
+//     Ok(())
+// }
 
 pub fn clear_console() {
     if let Err(e) = execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All)) {
@@ -75,13 +75,13 @@ pub fn reset_ansi() {
     print!("\x1b[0m")
 }
 
-pub fn start_thread<F>(settings: Settings, state: &State, task: F) -> JoinHandle<()>
+pub fn start_thread<F>(settings: Settings, state: &State, task: F) -> JoinHandle<Result<()>>
 where
-    F: Fn(Settings, State) + Send + 'static,
+    F: Fn(Settings, State) -> Result<()> + Send + 'static,
 {
     let state_clone = Arc::clone(&state);
     std::thread::spawn(move || {
-        task(settings, state_clone);
+        task(settings, state_clone)
     })
 }
 
@@ -162,15 +162,20 @@ pub fn quit_requested(state: &State) -> bool {
     state.quit_requested.load(Ordering::Relaxed)
 }
 
-pub fn start_new_log(settings: &Settings, shared_state: &State) {
-    let mut log_state = shared_state.log_state.lock().unwrap();
+pub fn start_new_log(settings: &Settings, shared_state: &State) -> Result<()> {
+    let mut log_state = shared_state.log_state.lock()
+        .map_err(|e| SpewcapError::Log(format!("Failed to acquire lock: {e}")))?;
     match Log::new(settings.timestamps) {
         Ok(log) => {
             let filename = log.get_filename().to_string();
             log_state.active_log = Some(log);
             print_success(&format!("Started new log file: {}", filename));
+            Ok(())
         }
-        _ => print_error("Failed to create log file"),
+        Err(e) => {
+            print_error("Failed to create log file");
+            Err(SpewcapError::Log(format!("Failed to create log file: {e}")))
+        }
     }
 }
 pub fn run_file_dialog(filename: &str, directory: &Option<PathBuf>) -> Option<PathBuf> {
@@ -220,11 +225,12 @@ pub fn get_curr_directory() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-pub fn list_ports() {
-    let ports = available_ports().expect("Could not find available ports!");
+pub fn list_ports() -> Result<()> {
+    let ports = available_ports()
+        .map_err(|e| SpewcapError::SerialPort(e))?;
     if ports.is_empty() {
         println!("No serial ports found!");
-        return;
+        return Ok(());
     }
     
     println!("Available serial ports:");
@@ -239,4 +245,5 @@ pub fn list_ports() {
         }
         println!("{}", description);
     }
+    Ok(())
 }

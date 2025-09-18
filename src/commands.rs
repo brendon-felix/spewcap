@@ -9,10 +9,11 @@ use crate::state::State;
 use crate::utils::{
     self, get_log_state, print_error, print_message, print_separator, print_warning,
 };
+use crate::error::{Result, SpewcapError};
 
 const POLL_PERIOD: u64 = 100; // milliseconds
 
-pub fn command_loop(settings: Settings, shared_state: State) {
+pub fn command_loop(settings: Settings, shared_state: State) -> Result<()> {
     if let Err(e) = enable_raw_mode() {
         print_warning(&format!(
             "Could not enable raw mode: {e}\nSome key commands may not work properly!"
@@ -33,13 +34,14 @@ pub fn command_loop(settings: Settings, shared_state: State) {
             print_error(&format!("Command handler error: {e}"));
         }
     }
+    Ok(())
 }
 
-fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind)>, String> {
+fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind)>> {
     let key_pressed = event::poll(Duration::from_millis(POLL_PERIOD))
-        .map_err(|e| format!("Could not poll for key event: {e}"))?;
+        .map_err(|e| SpewcapError::Terminal(format!("Could not poll for key event: {e}")))?;
     let command = if key_pressed {
-        let event = event::read().map_err(|e| format!("Could not read key event: {e}"))?;
+        let event = event::read().map_err(|e| SpewcapError::Terminal(format!("Could not read key event: {e}")))?;
         match event {
             Event::Key(KeyEvent { code, kind, .. }) => Some((code, kind)),
             _ => None,
@@ -55,13 +57,13 @@ fn handle_command(
     kind: KeyEventKind,
     settings: &Settings,
     shared_state: &State,
-) -> Result<(), String> {
+) -> Result<()> {
     if kind == KeyEventKind::Press {
         match code {
             KeyCode::Char('q') => utils::request_quit(settings, shared_state),
             KeyCode::Char('c') => utils::clear_console(),
             KeyCode::Char('p') => toggle_pause_capture(shared_state)?,
-            KeyCode::Char('n') => utils::start_new_log(&settings, shared_state),
+            KeyCode::Char('n') => utils::start_new_log(&settings, shared_state)?,
             KeyCode::Char('s') => utils::save_active_log(&settings, shared_state),
             KeyCode::Char('l') => toggle_pause_logging(shared_state)?,
             KeyCode::Char('h') => help_message(),
@@ -86,7 +88,7 @@ fn help_message() {
     print_separator();
 }
 
-fn toggle_pause_capture(shared_state: &State) -> Result<(), String> {
+fn toggle_pause_capture(shared_state: &State) -> Result<()> {
     let current = shared_state.capture_paused.load(Ordering::Relaxed);
     let new_value = !current;
     shared_state
@@ -101,7 +103,7 @@ fn toggle_pause_capture(shared_state: &State) -> Result<(), String> {
     Ok(())
 }
 
-fn toggle_pause_logging(shared_state: &State) -> Result<(), String> {
+fn toggle_pause_logging(shared_state: &State) -> Result<()> {
     let mut log_state = get_log_state(shared_state)?;
     match log_state.active_log {
         Some(ref mut log) => log.toggle(),
