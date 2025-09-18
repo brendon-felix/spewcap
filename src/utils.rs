@@ -25,7 +25,7 @@ pub fn initialize_app(args: crate::settings::Args) -> Result<(crate::settings::C
     let state = crate::state::init_state();
     
     if let Err(e) = setup_signal_handlers(state.clone()) {
-        eprintln!("Warning: Failed to set up signal handlers: {}", e);
+        eprintln!("Warning: Failed to set up signal handlers: {e}");
     }
     
     Ok((config, state))
@@ -45,14 +45,21 @@ pub fn setup_signal_handlers(state: State) -> Result<()> {
     }
     
     let state_clone = state.clone();
+    let term_flag_clone = Arc::clone(&term_flag);
     std::thread::spawn(move || {
         loop {
-            if term_flag.load(Ordering::Relaxed) {
+            if term_flag_clone.load(Ordering::Relaxed) {
                 eprintln!("\nReceived termination signal, shutting down gracefully...");
                 emergency_cleanup_logs(&state_clone);
                 request_quit_with_state(&state_clone);
                 break;
             }
+            
+            // Check if main program has quit to avoid zombie thread
+            if state_clone.quit_requested.load(Ordering::Relaxed) {
+                break;
+            }
+            
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     });
@@ -74,14 +81,21 @@ pub fn setup_signal_handlers(state: State) -> Result<()> {
     }
     
     let state_clone = state.clone();
+    let term_flag_clone = Arc::clone(&term_flag);
     std::thread::spawn(move || {
         loop {
-            if term_flag.load(Ordering::Relaxed) {
+            if term_flag_clone.load(Ordering::Relaxed) {
                 eprintln!("\nReceived termination signal, shutting down gracefully...");
                 emergency_cleanup_logs(&state_clone);
                 request_quit_with_state(&state_clone);
                 break;
             }
+            
+            // Check if main program has quit to avoid zombie thread
+            if state_clone.quit_requested.load(Ordering::Relaxed) {
+                break;
+            }
+            
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     });
@@ -102,24 +116,24 @@ pub fn sleep_ms(num_ms: u64) {
 
 // pub fn enter_alternate_screen() -> Result<()> {
 //     execute!(std::io::stdout(), EnterAlternateScreen)
-//         .map_err(|e| SpewcapError::Terminal(format!("Failed to enter alternate screen: {}", e)))?;
+//         .map_err(|e| SpewcapError::Terminal(format!("Failed to enter alternate screen: {e}")))?;
 //     execute!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0))
-//         .map_err(|e| SpewcapError::Terminal(format!("Failed to move cursor to top: {}", e)))?;
+//         .map_err(|e| SpewcapError::Terminal(format!("Failed to move cursor to top: {e}")))?;
 //     Ok(())
 // }
 
 // pub fn leave_alternate_screen() -> Result<()> {
 //     execute!(std::io::stdout(), LeaveAlternateScreen)
-//         .map_err(|e| SpewcapError::Terminal(format!("Failed to leave alternate screen: {}", e)))?;
+//         .map_err(|e| SpewcapError::Terminal(format!("Failed to leave alternate screen: {e}")))?;
 //     Ok(())
 // }
 
 pub fn clear_console() {
     if let Err(e) = execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All)) {
-        print_error(&format!("Failed to clear console: {}", e));
+        print_error(&format!("Failed to clear console: {e}"));
     }
     if let Err(e) = execute!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0)) {
-        print_error(&format!("Failed to move cursor: {}", e));
+        print_error(&format!("Failed to move cursor: {e}"));
     }
 }
 
@@ -290,7 +304,7 @@ pub fn save_active_log(settings: &Settings, shared_state: &State) {
                             Ok(()) => {
                                 print_success(&format!("Saved log to {}", log_path.display()));
                             }
-                            Err(e) => print_error(&format!("Failed to save log: {}", e)),
+                            Err(e) => print_error(&format!("Failed to save log: {e}")),
                         }
                     }
                     None => print_warning("Save operation was canceled!"),
@@ -342,7 +356,7 @@ pub fn cleanup_logs(shared_state: &State) {
     if let Ok(mut log_state) = get_log_state(shared_state) {
         if let Some(ref mut log) = log_state.active_log {
             if let Err(e) = log.ensure_flushed() {
-                eprintln!("Warning: Failed to flush log during cleanup: {}", e);
+                eprintln!("Warning: Failed to flush log during cleanup: {e}");
             }
             
             if log.has_unsaved_changes() {

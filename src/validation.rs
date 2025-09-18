@@ -34,7 +34,7 @@ pub fn validate_file_path(path: &str) -> Result<String> {
     
     if !path_buf.is_absolute() && !path_buf.exists() {
         let current_dir = std::env::current_dir()
-            .map_err(|e| SpewcapError::InvalidFilePath(format!("Cannot access current directory: {}", e)))?;
+            .map_err(|e| SpewcapError::InvalidFilePath(format!("Cannot access current directory: {e}")))?;
         
         let full_path = current_dir.join(path_buf);
         validate_directory_writable(full_path.parent().unwrap_or(&current_dir))?;

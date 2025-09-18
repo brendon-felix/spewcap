@@ -19,7 +19,7 @@ fn main() {
     
     if args.list {
         if let Err(e) = utils::list_ports() {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
             std::process::exit(1);
         }
         return;
@@ -28,13 +28,13 @@ fn main() {
     let (config, state) = match utils::initialize_app(args) {
         Ok((config, state)) => (config, state),
         Err(e) => {
-            eprintln!("Error: {}", e);
+            eprintln!("Error: {e}");
             std::process::exit(1);
         }
     };
     
     if let Err(e) = run(config, state) {
-        eprintln!("Error: {}", e);
+        eprintln!("Error: {e}");
         std::process::exit(1);
     }
 }
@@ -62,10 +62,10 @@ fn run(mut config: settings::Config, state: state::State) -> error::Result<()> {
     utils::cleanup_logs(&state);
     
     if let Err(e) = serial_result {
-        eprintln!("Serial thread error: {}", e);
+        eprintln!("Serial thread error: {e}");
     }
     if let Err(e) = command_result {
-        eprintln!("Command thread error: {}", e);
+        eprintln!("Command thread error: {e}");
     }
     
     // utils::leave_alternate_screen()?;

@@ -62,7 +62,7 @@ impl LogFile {
 impl Drop for LogFile {
     fn drop(&mut self) {
         if let Err(e) = self.inner.force_flush() {
-            eprintln!("Warning: Failed to flush log during cleanup: {}", e);
+            eprintln!("Warning: Failed to flush log during cleanup: {e}");
         }
         if self.cleanup_on_drop && self.temp_file_path.exists() {
             match std::fs::remove_file(&self.temp_file_path) {
@@ -182,6 +182,14 @@ impl Log {
             let _ = self.writer.flush();
             self.flush_counter = 0;
         }
+
+        // Prevent string buffer from growing indefinitely
+        if self.line_buffer.capacity() > 2048 {
+            self.line_buffer.shrink_to(512);
+        }
+        if self.timestamp_buffer.capacity() > 128 {
+            self.timestamp_buffer.shrink_to(32);
+        }
     }
 
     pub fn force_flush(&mut self) -> std::io::Result<()> {
@@ -200,7 +208,7 @@ impl Log {
                 Ok(())
             }
             Err(e) => {
-                eprintln!("Error saving file: {}", e);
+                eprintln!("Error saving file: {e}");
                 Err(crate::error::SpewcapError::Io(e))
             }
         }

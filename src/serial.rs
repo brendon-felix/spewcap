@@ -29,6 +29,7 @@ impl Buffer {
             line_index: 0,
         }
     }
+    
     fn write(&mut self, data_buffer: &[u8], data_size: usize) {
         if self.index + data_size > self.buffer.len() {
             self.buffer.resize(self.index + data_size, 0);
@@ -37,6 +38,7 @@ impl Buffer {
         self.buffer[self.index..self.index + data_size].copy_from_slice(&data_buffer[..data_size]);
         self.index += data_size;
     }
+    
     fn next_line(&mut self) -> Option<&str> {
         if let Some(newline_index) = self.buffer[self.line_index..self.index]
             .iter()
@@ -60,6 +62,7 @@ impl Buffer {
             None
         }
     }
+    
     fn shift_remaining(&mut self) {
         let remaining_bytes = self.index - self.line_index;
         if remaining_bytes > 0 && self.line_index > 0 {
@@ -68,9 +71,25 @@ impl Buffer {
         self.line_index = 0;
         self.index = remaining_bytes;
 
+        // Improved memory management: prevent unbounded growth
         if self.buffer.capacity() > 16384 && remaining_bytes < 4096 {
             self.buffer.shrink_to(8192);
         }
+        
+        // Additional safety: if buffer gets extremely large, reset it
+        if self.buffer.capacity() > 65536 {
+            self.buffer = Vec::with_capacity(8192);
+            self.index = 0;
+            self.line_index = 0;
+        }
+    }
+}
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        // Explicitly clear buffer to ensure memory is released
+        self.buffer.clear();
+        self.buffer.shrink_to_fit();
     }
 }
 
@@ -125,12 +144,12 @@ fn print_status(port_name: &str, status: ConnectionStatus) {
 fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
     // Validate inputs before attempting to open the port
     if let Err(e) = validation::validate_port_name(port) {
-        print_error(&format!("Invalid port: {}", e));
+        print_error(&format!("Invalid port: {e}"));
         return None;
     }
     
     if let Err(e) = validation::validate_baud_rate(baud_rate) {
-        print_error(&format!("Invalid baud rate: {}", e));
+        print_error(&format!("Invalid baud rate: {e}"));
         return None;
     }
     
