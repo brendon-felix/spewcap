@@ -5,6 +5,7 @@
 
 use clap::Parser;
 
+mod buffer;
 mod commands;
 mod error;
 mod log;

@@ -34,73 +34,56 @@ pub fn initialize_app(args: crate::settings::Args) -> Result<(crate::settings::C
 #[cfg(unix)]
 pub fn setup_signal_handlers(state: State) -> Result<()> {
     use signal_hook::consts::signal::*;
-    use signal_hook::flag;
-    use std::sync::atomic::AtomicBool;
-
-    let term_flag = Arc::new(AtomicBool::new(false));
-    
-    for &signal in &[SIGINT, SIGTERM, SIGQUIT] {
-        flag::register(signal, Arc::clone(&term_flag))
-            .map_err(|e| SpewcapError::Signal(format!("Failed to register signal {}: {}", signal, e)))?;
-    }
-    
-    let state_clone = state.clone();
-    let term_flag_clone = Arc::clone(&term_flag);
-    std::thread::spawn(move || {
-        loop {
-            if term_flag_clone.load(Ordering::Relaxed) {
-                eprintln!("\nReceived termination signal, shutting down gracefully...");
-                emergency_cleanup_logs(&state_clone);
-                request_quit_with_state(&state_clone);
-                break;
-            }
-            
-            // Check if main program has quit to avoid zombie thread
-            if state_clone.quit_requested.load(Ordering::Relaxed) {
-                break;
-            }
-            
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-    });
-    
-    Ok(())
+    let signals = &[SIGINT, SIGTERM, SIGQUIT];
+    setup_signal_handlers_common(state, signals)
 }
 
 #[cfg(windows)]
 pub fn setup_signal_handlers(state: State) -> Result<()> {
     use signal_hook::consts::signal::*;
+    let signals = &[SIGINT, SIGTERM];
+    setup_signal_handlers_common(state, signals)
+}
+
+fn setup_signal_handlers_common(state: State, signals: &[i32]) -> Result<()> {
     use signal_hook::flag;
     use std::sync::atomic::AtomicBool;
 
     let term_flag = Arc::new(AtomicBool::new(false));
     
-    for &signal in &[SIGINT, SIGTERM] {
+    for &signal in signals {
         flag::register(signal, Arc::clone(&term_flag))
             .map_err(|e| SpewcapError::Signal(format!("Failed to register signal {}: {}", signal, e)))?;
     }
-    
+    spawn_signal_monitoring_thread(state, term_flag);
+    Ok(())
+}
+
+fn spawn_signal_monitoring_thread(state: State, term_flag: Arc<std::sync::atomic::AtomicBool>) {
     let state_clone = state.clone();
     let term_flag_clone = Arc::clone(&term_flag);
     std::thread::spawn(move || {
-        loop {
-            if term_flag_clone.load(Ordering::Relaxed) {
-                eprintln!("\nReceived termination signal, shutting down gracefully...");
-                emergency_cleanup_logs(&state_clone);
-                request_quit_with_state(&state_clone);
-                break;
-            }
-            
-            // Check if main program has quit to avoid zombie thread
-            if state_clone.quit_requested.load(Ordering::Relaxed) {
-                break;
-            }
-            
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
+        monitor_signals(state_clone, term_flag_clone);
     });
-    
-    Ok(())
+}
+
+fn monitor_signals(state: State, term_flag: Arc<std::sync::atomic::AtomicBool>) {
+    loop {
+        if term_flag.load(Ordering::Relaxed) {
+            handle_termination_signal(&state);
+            break;
+        }
+        if state.quit_requested.load(Ordering::Relaxed) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+fn handle_termination_signal(state: &State) {
+    eprintln!("\nReceived termination signal, shutting down gracefully...");
+    emergency_cleanup_logs(state);
+    request_quit_with_state(state);
 }
 
 pub fn get_log_state(shared_state: &State) -> Result<MutexGuard<'_, LogState>> {
@@ -294,26 +277,36 @@ pub fn save_active_log(settings: &Settings, shared_state: &State) {
             return;
         }
     };
+    
     match log_state.active_log {
         Some(ref mut log) => {
-            let _ = log.force_flush();
-            if log.has_unsaved_changes() {
-                match run_file_dialog(log.get_filename(), &settings.log_folder) {
-                    Some(log_path) => {
-                        match log.save_as_and_keep(&log_path) {
-                            Ok(()) => {
-                                print_success(&format!("Saved log to {}", log_path.display()));
-                            }
-                            Err(e) => print_error(&format!("Failed to save log: {e}")),
-                        }
-                    }
-                    None => print_warning("Save operation was canceled!"),
-                }
-            } else {
-                print_warning("No unsaved changes to save!");
-            }
+            save_log_with_dialog(log, settings);
         }
         None => print_warning("No log started! Press `L` to start one"),
+    }
+}
+
+fn save_log_with_dialog(log: &mut LogFile, settings: &Settings) {
+    let _ = log.force_flush();
+    
+    if !log.has_unsaved_changes() {
+        print_warning("No unsaved changes to save!");
+        return;
+    }
+    
+    let log_path = match run_file_dialog(log.get_filename(), &settings.log_folder) {
+        Some(path) => path,
+        None => {
+            print_warning("Save operation was canceled!");
+            return;
+        }
+    };
+    
+    match log.save_as_and_keep(&log_path) {
+        Ok(()) => {
+            print_success(&format!("Saved log to {}", log_path.display()));
+        }
+        Err(e) => print_error(&format!("Failed to save log: {e}")),
     }
 }
 

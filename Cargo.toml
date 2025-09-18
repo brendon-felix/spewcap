@@ -17,6 +17,7 @@ rfd = "0.15.2"
 dialoguer = "0.11.0"
 thiserror = "2.0"
 signal-hook = "0.3"
+bytes = "1.7"
 
 [profile.release]
 opt-level = 3
