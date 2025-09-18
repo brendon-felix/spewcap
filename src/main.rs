@@ -1,9 +1,9 @@
 // TODO: Remove temp log files after they are saved OR experiment with large String buffer
 //   TODO: If still using file buffers, implement command to wipe the active file
-// TODO: Fix error handling (when the command loop panics, the serial loop can't end)
-//   TODO: Try and remove all expects, unwraps and panics
 // TODO: Implement set port command
 //   TODO: Pause spew while setting port
+
+use clap::Parser;
 
 mod commands;
 mod log;
@@ -13,8 +13,15 @@ mod state;
 mod utils;
 
 fn main() {
+    let args = settings::Args::parse();
+    
+    if args.list {
+        utils::list_ports();
+        std::process::exit(0);
+    }
+    
     utils::clear_console();
-    let mut config = settings::get_config();
+    let mut config = settings::get_config(args);
     if !config.disable_welcome.unwrap_or(false) {
         utils::print_welcome();
     }

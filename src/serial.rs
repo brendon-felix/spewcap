@@ -2,6 +2,7 @@ use colored::Colorize;
 use serialport5::{self, SerialPort, SerialPortBuilder};
 use std::io::{self, BufWriter, Read, Write};
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use crate::settings::Settings;
 use crate::state::State;
@@ -122,6 +123,7 @@ fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
     let baud_rate = baud_rate;
     SerialPortBuilder::new()
         .baud_rate(baud_rate)
+        .read_timeout(Some(Duration::from_millis(100)))  // 100ms timeout
         .open(port)
         .ok()
 }
@@ -161,7 +163,12 @@ fn read_loop<W: Write>(
                     }
                 }
             }
-            Err(_) => return ConnectionStatus::Disconnected,
+            Err(e) if e.kind() == io::ErrorKind::TimedOut => {
+                continue;
+            }
+            Err(_) => {
+                return ConnectionStatus::Disconnected;
+            }
         }
     }
 }

@@ -49,7 +49,7 @@ pub struct Args {
     log_folder: Option<String>,
 
     #[arg(long)]
-    list: bool,
+    pub list: bool,
 }
 
 #[derive(Default, Deserialize, Debug)]
@@ -128,8 +128,7 @@ fn select_baud_rate() -> Result<u32, String> {
     Ok(options[selection])
 }
 
-pub fn get_config() -> Config {
-    let args = Args::parse();
+pub fn get_config(args: Args) -> Config {
     let curr_dir = utils::get_curr_directory();
     let path_in_curr_dir = curr_dir.join("spewcap_config.toml");
     let exe_dir = utils::get_exe_directory().unwrap_or(utils::get_curr_directory());

@@ -2,6 +2,7 @@ use colored::Colorize;
 use crossterm::terminal;
 use regex::Regex;
 use rfd::FileDialog;
+use serialport5::{available_ports, SerialPortType};
 use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -197,4 +198,25 @@ pub fn get_exe_directory() -> Option<PathBuf> {
 }
 pub fn get_curr_directory() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+pub fn list_ports() {
+    let ports = available_ports().expect("Could not find available ports!");
+    if ports.is_empty() {
+        println!("No serial ports found!");
+        return;
+    }
+    
+    println!("Available serial ports:");
+    for port in ports {
+        let mut description = format!("  {}", port.port_name);
+        if let SerialPortType::UsbPort(info) = &port.port_type {
+            let manufacturer = info.manufacturer.as_deref().unwrap_or("Unknown");
+            let product = info.product.as_deref().unwrap_or("Unknown");
+            if manufacturer != "Unknown" || product != "Unknown" {
+                description = format!("  {} - {} {}", port.port_name, manufacturer, product);
+            }
+        }
+        println!("{}", description);
+    }
 }
