@@ -2,8 +2,8 @@ use colored::Colorize;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::enable_raw_mode;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
+use crate::constants::COMMAND_POLL_PERIOD;
 use crate::settings::Settings;
 use crate::state::State;
 use crate::utils::{
@@ -11,7 +11,6 @@ use crate::utils::{
 };
 use crate::error::{Result, SpewcapError};
 
-const POLL_PERIOD: u64 = 100; // milliseconds
 
 pub fn command_loop(settings: Settings, shared_state: State) -> Result<()> {
     if let Err(e) = enable_raw_mode() {
@@ -38,7 +37,7 @@ pub fn command_loop(settings: Settings, shared_state: State) -> Result<()> {
 }
 
 fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind, KeyModifiers)>> {
-    let key_pressed = event::poll(Duration::from_millis(POLL_PERIOD))
+    let key_pressed = event::poll(COMMAND_POLL_PERIOD)
         .map_err(|e| SpewcapError::Terminal(format!("Could not poll for key event: {e}")))?;
     let command = if key_pressed {
         let event = event::read().map_err(|e| SpewcapError::Terminal(format!("Could not read key event: {e}")))?;

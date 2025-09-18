@@ -7,11 +7,17 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use std::{fs::File, io::BufWriter};
 
+use crate::constants::{
+    LINE_BUFFER_SHRINK_TARGET, LINE_BUFFER_SHRINK_THRESHOLD, LOG_FLUSH_INTERVAL,
+    LOG_LINE_BUFFER_INITIAL_CAPACITY, LOG_WRITER_BUFFER_CAPACITY, MILLIS_PER_HOUR,
+    MILLIS_PER_MINUTE, MILLIS_PER_SECOND, TIMESTAMP_BUFFER_INITIAL_CAPACITY,
+    TIMESTAMP_BUFFER_SHRINK_TARGET, TIMESTAMP_BUFFER_SHRINK_THRESHOLD,
+};
 use crate::utils::{ansi_regex, print_message};
 use crate::validation;
 use crate::error::Result;
 
-const FLUSH_INTERVAL: usize = 10;
+
 
 pub struct LogFile {
     inner: Log,
@@ -114,7 +120,7 @@ impl Log {
         let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
         let file_path = PathBuf::from(&filename);
         let file = File::create(&file_path)?;
-        let writer = BufWriter::with_capacity(8192, file);
+        let writer = BufWriter::with_capacity(LOG_WRITER_BUFFER_CAPACITY, file);
         let ansi_regex = ansi_regex();
         let start_time = Instant::now();
         Ok(Log {
@@ -126,8 +132,8 @@ impl Log {
             prepend_timestamps,
             ansi_regex,
             start_time,
-            timestamp_buffer: String::with_capacity(32),
-            line_buffer: String::with_capacity(512),
+            timestamp_buffer: String::with_capacity(TIMESTAMP_BUFFER_INITIAL_CAPACITY),
+            line_buffer: String::with_capacity(LOG_LINE_BUFFER_INITIAL_CAPACITY),
             flush_counter: 0,
         })
     }
@@ -178,17 +184,17 @@ impl Log {
         self.flush_counter += 1;
 
         // batch flush (performance optimization)
-        if self.flush_counter >= FLUSH_INTERVAL {
+        if self.flush_counter >= LOG_FLUSH_INTERVAL {
             let _ = self.writer.flush();
             self.flush_counter = 0;
         }
 
         // Prevent string buffer from growing indefinitely
-        if self.line_buffer.capacity() > 2048 {
-            self.line_buffer.shrink_to(512);
+        if self.line_buffer.capacity() > LINE_BUFFER_SHRINK_THRESHOLD {
+            self.line_buffer.shrink_to(LINE_BUFFER_SHRINK_TARGET);
         }
-        if self.timestamp_buffer.capacity() > 128 {
-            self.timestamp_buffer.shrink_to(32);
+        if self.timestamp_buffer.capacity() > TIMESTAMP_BUFFER_SHRINK_THRESHOLD {
+            self.timestamp_buffer.shrink_to(TIMESTAMP_BUFFER_SHRINK_TARGET);
         }
     }
 
@@ -217,10 +223,10 @@ impl Log {
     fn create_timestamp_in_buffer(&mut self, duration: Duration) {
         self.timestamp_buffer.clear();
         let total_millis = duration.as_millis();
-        let hours = total_millis / 3_600_000;
-        let minutes = (total_millis % 3_600_000) / 60_000;
-        let seconds = (total_millis % 60_000) / 1_000;
-        let millis = total_millis % 1_000;
+        let hours = total_millis / MILLIS_PER_HOUR;
+        let minutes = (total_millis % MILLIS_PER_HOUR) / MILLIS_PER_MINUTE;
+        let seconds = (total_millis % MILLIS_PER_MINUTE) / MILLIS_PER_SECOND;
+        let millis = total_millis % MILLIS_PER_SECOND;
 
         use std::fmt::Write;
         write!(

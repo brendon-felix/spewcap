@@ -7,6 +7,7 @@ use clap::Parser;
 
 mod buffer;
 mod commands;
+mod constants;
 mod error;
 mod log;
 mod serial;

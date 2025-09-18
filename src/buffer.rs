@@ -1,12 +1,14 @@
 use bytes::BytesMut;
 
+use crate::constants::DEFAULT_LINE_BUFFER_CAPACITY;
+
 pub struct LineBuffer {
     buffer: BytesMut,
 }
 
 impl LineBuffer {
     pub fn new() -> Self {
-        Self::with_capacity(8192)
+        Self::with_capacity(DEFAULT_LINE_BUFFER_CAPACITY)
     }
     
     pub fn with_capacity(capacity: usize) -> Self {

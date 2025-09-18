@@ -6,6 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use toml;
 
+use crate::constants::DEFAULT_BAUD_RATE;
 use crate::utils;
 use crate::error::{Result, SpewcapError};
 use crate::validation;
@@ -143,9 +144,15 @@ fn select_baud_rate() -> Result<u32> {
     let options = [
         4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
     ];
+    
+    // Find the index of the default baud rate (115200)
+    let default_index = options.iter()
+        .position(|&rate| rate == DEFAULT_BAUD_RATE)
+        .unwrap_or(5); // fallback to index 5 if not found
+    
     let selection = Select::new()
         .with_prompt("Select baud rate")
-        .default(5) // default is 115200 at index 5
+        .default(default_index)
         .items(&options)
         .interact()
         .map_err(|e| SpewcapError::Dialog(format!("No baud rate selected: {e}")))?;

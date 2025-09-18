@@ -2,9 +2,12 @@ use colored::Colorize;
 use serialport5::{self, SerialPort, SerialPortBuilder};
 use std::io::{self, BufWriter, Read, Write};
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use crate::buffer::LineBuffer;
+use crate::constants::{
+    HIGH_THROUGHPUT_YIELD_THRESHOLD, SERIAL_NO_DATA_SLEEP, SERIAL_READ_BUFFER_SIZE,
+    SERIAL_READ_TIMEOUT, SERIAL_RETRY_DELAY, STDOUT_BUFFER_CAPACITY,
+};
 use crate::settings::Settings;
 use crate::state::State;
 use crate::utils::{get_log_state, print_error, print_message, quit_requested, sleep_ms};
@@ -27,7 +30,7 @@ pub fn connect_loop(settings: Settings, shared_state: State) -> Result<()> {
         match open_serial_port(port_name, settings.baud_rate) {
             Some(port) => {
                 print_status(port_name, ConnectionStatus::Connected);
-                let mut stdout = Box::new(BufWriter::with_capacity(1024, io::stdout()));
+                let mut stdout = Box::new(BufWriter::with_capacity(STDOUT_BUFFER_CAPACITY, io::stdout()));
                 let status = read_loop(port, &shared_state, &mut stdout);
                 match status {
                     ConnectionStatus::Connected => break, // still connected means we are quitting
@@ -43,7 +46,7 @@ pub fn connect_loop(settings: Settings, shared_state: State) -> Result<()> {
                 if first_attempt {
                     print_status(port_name, ConnectionStatus::NotConnected);
                 }
-                sleep_ms(500); // wait before retrying
+                sleep_ms(SERIAL_RETRY_DELAY.as_millis() as u64); // wait before retrying
             }
         }
         first_attempt = false;
@@ -79,7 +82,7 @@ fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
     
     SerialPortBuilder::new()
         .baud_rate(baud_rate)
-        .read_timeout(Some(Duration::from_millis(100)))  // 100ms timeout
+        .read_timeout(Some(SERIAL_READ_TIMEOUT))  // timeout duration from constants
         .open(port)
         .ok()
 }
@@ -90,7 +93,7 @@ fn read_loop<W: Write>(
     stdout: &mut W,
 ) -> ConnectionStatus {
     let mut line_buffer = LineBuffer::new();
-    let mut data_buffer = [0; 2048];
+    let mut data_buffer = [0; SERIAL_READ_BUFFER_SIZE];
     
     loop {
         if quit_requested(&shared_state) {
@@ -101,7 +104,7 @@ fn read_loop<W: Write>(
             ReadResult::Data(data_size) => {
                 process_received_data(&mut line_buffer, &data_buffer, data_size, stdout, shared_state);
             }
-            ReadResult::NoData => sleep_ms(10),
+            ReadResult::NoData => sleep_ms(SERIAL_NO_DATA_SLEEP.as_millis() as u64),
             ReadResult::Error => return ConnectionStatus::Disconnected,
         }
     }
@@ -149,7 +152,7 @@ fn process_complete_lines<W: Write>(
         lines_processed += 1;
         
         // yield occasionally for very high throughput
-        if lines_processed % 100 == 0 {
+        if lines_processed % HIGH_THROUGHPUT_YIELD_THRESHOLD == 0 {
             flush_output(stdout);
             std::thread::yield_now();
         }

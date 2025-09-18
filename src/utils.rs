@@ -13,6 +13,7 @@ use std::sync::{Arc, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use crate::constants::SIGNAL_MONITOR_SLEEP;
 use crate::log::LogFile;
 use crate::settings::Settings;
 use crate::state::{LogState, State};
@@ -76,7 +77,7 @@ fn monitor_signals(state: State, term_flag: Arc<std::sync::atomic::AtomicBool>) 
         if state.quit_requested.load(Ordering::Relaxed) {
             break;
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(SIGNAL_MONITOR_SLEEP);
     }
 }
 
