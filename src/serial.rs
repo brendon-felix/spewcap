@@ -89,7 +89,7 @@ fn read_loop<W: Write>(
     let mut line_buffer = LineBuffer::new();
     let mut data_buffer = [0; SERIAL_READ_BUFFER_SIZE];
     loop {
-        if quit_requested(&shared_state) {
+        if quit_requested(shared_state) {
             return ConnectionStatus::Connected;
         }
         match read_data_from_port(&mut port, &mut data_buffer) {

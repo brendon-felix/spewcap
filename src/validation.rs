@@ -16,7 +16,7 @@ pub fn validate_baud_rate(baud_rate: u32) -> Result<u32> {
 
 pub fn validate_port_name(port_name: &str) -> Result<String> {
     let available_ports = available_ports()
-        .map_err(|e| SpewcapError::SerialPort(e))?;
+        .map_err(SpewcapError::SerialPort)?;
     let port_exists = available_ports
         .iter()
         .any(|port| port.port_name == port_name);

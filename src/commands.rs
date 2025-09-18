@@ -67,8 +67,8 @@ fn handle_command(
             },
             KeyCode::Char('c') => utils::clear_console(),
             KeyCode::Char('p') => toggle_pause_capture(shared_state)?,
-            KeyCode::Char('n') => utils::start_new_log(&settings, shared_state)?,
-            KeyCode::Char('s') => utils::save_active_log(&settings, shared_state),
+            KeyCode::Char('n') => utils::start_new_log(settings, shared_state)?,
+            KeyCode::Char('s') => utils::save_active_log(settings, shared_state),
             KeyCode::Char('l') => toggle_pause_logging(shared_state)?,
             KeyCode::Char('h') => help_message(),
             _ => {}
@@ -80,7 +80,7 @@ fn handle_command(
 fn help_message() {
     print_separator();
     println!("Help: Use the following keys to execute commands:");
-    println!("");
+    println!();
     println!("- `Q` or `Ctrl+C`: Quit the application");
     println!("- `C`: Clear the console");
     println!("- `P`: Pause/resume capture");
@@ -88,7 +88,7 @@ fn help_message() {
     println!("- `L`: Pause/resume logging");
     println!("- `S`: Save active log as...");
     println!("- `H`: Display this help message");
-    println!("");
+    println!();
     print_separator();
 }
 

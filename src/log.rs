@@ -49,7 +49,7 @@ impl LogFile {
     }
 
     pub fn save_as_and_keep(&mut self, new_file_path: &PathBuf) -> Result<()> {
-        self.inner.force_flush().map_err(|e| crate::error::SpewcapError::Io(e))?;
+        self.inner.force_flush().map_err(crate::error::SpewcapError::Io)?;
         let result = self.inner.save_as(new_file_path);
         if result.is_ok() {
             self.disable_cleanup();

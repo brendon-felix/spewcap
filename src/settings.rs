@@ -4,7 +4,6 @@ use serde::Deserialize;
 use serialport5::{available_ports, SerialPortType};
 use std::fs;
 use std::path::PathBuf;
-use toml;
 
 use crate::constants::DEFAULT_BAUD_RATE;
 use crate::utils;
@@ -110,7 +109,7 @@ impl Config {
 }
 
 fn select_port() -> Result<String> {
-    let ports = available_ports().map_err(|e| SpewcapError::SerialPort(e))?;
+    let ports = available_ports().map_err(SpewcapError::SerialPort)?;
     if ports.is_empty() {
         return Err(SpewcapError::NoPortsFound);
     }
@@ -118,7 +117,7 @@ fn select_port() -> Result<String> {
     let port_descriptions: Vec<String> = ports
         .iter()
         .map(|port| {
-            let mut description = format!("{}", port.port_name);
+            let mut description = port.port_name.to_string();
             if let SerialPortType::UsbPort(info) = &port.port_type {
                 description = format!(
                     "{} {}",
@@ -176,7 +175,7 @@ fn load_config_from_files() -> Result<Config> {
 
 fn get_config_file_paths() -> Vec<PathBuf> {
     let curr_dir = utils::get_curr_directory();
-    let exe_dir = utils::get_exe_directory().unwrap_or_else(|| utils::get_curr_directory());
+    let exe_dir = utils::get_exe_directory().unwrap_or_else(utils::get_curr_directory);
     vec![
         curr_dir.join("spewcap_config.toml"),
         exe_dir.join("spewcap_config.toml"),

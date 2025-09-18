@@ -146,7 +146,7 @@ pub fn start_thread<F>(settings: Settings, state: &State, task: F) -> JoinHandle
 where
     F: Fn(Settings, State) -> Result<()> + Send + 'static,
 {
-    let state_clone = Arc::clone(&state);
+    let state_clone = Arc::clone(state);
     std::thread::spawn(move || {
         task(settings, state_clone)
     })
@@ -221,8 +221,7 @@ pub fn request_quit(settings: &Settings, shared_state: &State) {
     };
     let need_save = log_state
         .active_log
-        .as_ref()
-        .map_or(false, |log| log.has_unsaved_changes());
+        .as_ref().is_some_and(|log| log.has_unsaved_changes());
 
     drop(log_state);
 
@@ -237,7 +236,7 @@ pub fn quit_requested(state: &State) -> bool {
 
 pub fn request_quit_with_state(shared_state: &State) {
     shared_state.quit_requested.store(true, Ordering::Relaxed);
-    if let Err(_) = terminal::disable_raw_mode() {}
+    if terminal::disable_raw_mode().is_err() {}
 }
 
 pub fn start_new_log(settings: &Settings, shared_state: &State) -> Result<()> {
@@ -312,7 +311,7 @@ fn save_log_with_dialog(log: &mut LogFile, settings: &Settings) {
 }
 
 pub fn get_exe_directory() -> Option<PathBuf> {
-    if let Some(exe_path) = std::env::current_exe().ok() {
+    if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_directory) = exe_path.parent() {
             return Some(exe_directory.to_path_buf());
         }
@@ -325,7 +324,7 @@ pub fn get_curr_directory() -> PathBuf {
 
 pub fn list_ports() -> Result<()> {
     let ports = available_ports()
-        .map_err(|e| SpewcapError::SerialPort(e))?;
+        .map_err(SpewcapError::SerialPort)?;
     if ports.is_empty() {
         println!("No serial ports found!");
         return Ok(());
