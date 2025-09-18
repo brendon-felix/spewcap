@@ -1563,6 +1563,7 @@ dependencies = [
  "rfd",
  "serde",
  "serialport5",
+ "signal-hook",
  "term_size",
  "thiserror 2.0.16",
  "toml",

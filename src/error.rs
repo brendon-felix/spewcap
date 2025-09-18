@@ -38,6 +38,9 @@ pub enum SpewcapError {
     #[error("Log error: {0}")]
     Log(String),
     
+    #[error("Signal handling error: {0}")]
+    Signal(String),
+    
     #[error("No serial ports found")]
     NoPortsFound,
     

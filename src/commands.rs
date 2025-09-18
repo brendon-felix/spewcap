@@ -1,5 +1,5 @@
 use colored::Colorize;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::enable_raw_mode;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -21,11 +21,11 @@ pub fn command_loop(settings: Settings, shared_state: State) -> Result<()> {
     }
     loop {
         let result = match poll_for_command() {
-            Ok(Some((code, kind))) => {
+            Ok(Some((code, kind, modifiers))) => {
                 if utils::quit_requested(&shared_state) {
                     break;
                 }
-                handle_command(code, kind, &settings, &shared_state)
+                handle_command(code, kind, modifiers, &settings, &shared_state)
             }
             Ok(None) => Ok(()),
             Err(e) => Err(e),
@@ -37,13 +37,13 @@ pub fn command_loop(settings: Settings, shared_state: State) -> Result<()> {
     Ok(())
 }
 
-fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind)>> {
+fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind, KeyModifiers)>> {
     let key_pressed = event::poll(Duration::from_millis(POLL_PERIOD))
         .map_err(|e| SpewcapError::Terminal(format!("Could not poll for key event: {e}")))?;
     let command = if key_pressed {
         let event = event::read().map_err(|e| SpewcapError::Terminal(format!("Could not read key event: {e}")))?;
         match event {
-            Event::Key(KeyEvent { code, kind, .. }) => Some((code, kind)),
+            Event::Key(KeyEvent { code, kind, modifiers, .. }) => Some((code, kind, modifiers)),
             _ => None,
         }
     } else {
@@ -55,12 +55,17 @@ fn poll_for_command() -> Result<Option<(KeyCode, KeyEventKind)>> {
 fn handle_command(
     code: KeyCode,
     kind: KeyEventKind,
+    modifiers: KeyModifiers,
     settings: &Settings,
     shared_state: &State,
 ) -> Result<()> {
     if kind == KeyEventKind::Press {
         match code {
             KeyCode::Char('q') => utils::request_quit(settings, shared_state),
+            KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                // Handle Ctrl+C in raw mode - same as 'q' command
+                utils::request_quit(settings, shared_state)
+            },
             KeyCode::Char('c') => utils::clear_console(),
             KeyCode::Char('p') => toggle_pause_capture(shared_state)?,
             KeyCode::Char('n') => utils::start_new_log(&settings, shared_state)?,
@@ -77,7 +82,7 @@ fn help_message() {
     print_separator();
     println!("Help: Use the following keys to execute commands:");
     println!("");
-    println!("- `Q`: Quit the application");
+    println!("- `Q` or `Ctrl+C`: Quit the application");
     println!("- `C`: Clear the console");
     println!("- `P`: Pause/resume capture");
     println!("- `N`: Start a new log");

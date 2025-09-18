@@ -13,8 +13,88 @@ use crate::error::Result;
 
 const FLUSH_INTERVAL: usize = 10;
 
+pub struct LogFile {
+    inner: Log,
+    temp_file_path: PathBuf,
+    cleanup_on_drop: bool,
+}
+
+impl LogFile {
+    pub fn new(prepend_timestamps: bool) -> std::result::Result<Self, std::io::Error> {
+        let inner = Log::new(prepend_timestamps)?;
+        let temp_file_path = inner.file_path.clone();
+        Ok(LogFile {
+            inner,
+            temp_file_path,
+            cleanup_on_drop: true,
+        })
+    }
+
+    pub fn disable_cleanup(&mut self) {
+        self.cleanup_on_drop = false;
+    }
+
+    pub fn cleanup_temp_file(&mut self) -> std::io::Result<()> {
+        if self.cleanup_on_drop && self.temp_file_path.exists() {
+            self.inner.force_flush()?;
+            std::fs::remove_file(&self.temp_file_path)?;
+            self.cleanup_on_drop = false;
+            print_message("Temporary log file cleaned up".green());
+        }
+        Ok(())
+    }
+
+    pub fn ensure_flushed(&mut self) -> std::io::Result<()> {
+        self.inner.force_flush()
+    }
+
+    pub fn save_as_and_keep(&mut self, new_file_path: &PathBuf) -> Result<()> {
+        self.inner.force_flush().map_err(|e| crate::error::SpewcapError::Io(e))?;
+        let result = self.inner.save_as(new_file_path);
+        if result.is_ok() {
+            self.disable_cleanup();
+        }
+        
+        result
+    }
+}
+
+impl Drop for LogFile {
+    fn drop(&mut self) {
+        if let Err(e) = self.inner.force_flush() {
+            eprintln!("Warning: Failed to flush log during cleanup: {}", e);
+        }
+        if self.cleanup_on_drop && self.temp_file_path.exists() {
+            match std::fs::remove_file(&self.temp_file_path) {
+                Ok(_) => {
+                    if std::env::var("SPEWCAP_DEBUG").is_ok() {
+                        print_message("Temporary log file cleaned up on drop".green());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to clean up temporary log file '{}': {}", 
+                             self.temp_file_path.display(), e);
+                }
+            }
+        }
+    }
+}
+
+impl std::ops::Deref for LogFile {
+    type Target = Log;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl std::ops::DerefMut for LogFile {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 pub struct Log {
-    // pub file: File,
     writer: BufWriter<File>,
     filename: String,
     file_path: PathBuf,
@@ -23,21 +103,21 @@ pub struct Log {
     prepend_timestamps: bool,
     ansi_regex: Regex,
     start_time: Instant,
-    // Performance optimizations
-    timestamp_buffer: String, // Reuse buffer for timestamps
-    line_buffer: String,      // Reuse buffer for line processing
-    flush_counter: usize,     // Batch flushes
+
+    // performance optimizations
+    timestamp_buffer: String,
+    line_buffer: String,
+    flush_counter: usize,
 }
 impl Log {
     pub fn new(prepend_timestamps: bool) -> std::result::Result<Self, std::io::Error> {
         let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
         let file_path = PathBuf::from(&filename);
         let file = File::create(&file_path)?;
-        let writer = BufWriter::with_capacity(8192, file); // Larger buffer
+        let writer = BufWriter::with_capacity(8192, file);
         let ansi_regex = ansi_regex();
         let start_time = Instant::now();
         Ok(Log {
-            // file,
             writer,
             filename,
             file_path,
@@ -55,10 +135,8 @@ impl Log {
     pub fn toggle(&mut self) {
         self.enabled = !self.enabled;
         if self.enabled {
-            // let _ = self.write_line("=== Resumed logging ==\n");
             print_message(format!("Logging {}", "resumed".green()));
         } else {
-            // let _ = self.write_line("=== Paused  logging ==\n");
             print_message(format!("Logging {}", "paused".yellow()));
         }
     }
@@ -78,7 +156,7 @@ impl Log {
     pub fn write_line(&mut self, raw_line: &str) {
         self.line_buffer.clear();
 
-        // Avoid regex if no ANSI codes detected (performance optimization)
+        // avoid regex if no ANSI codes detected (performance optimization)
         if raw_line.contains('\x1b') {
             self.line_buffer
                 .push_str(&self.ansi_regex.replace_all(raw_line, ""));
@@ -99,7 +177,7 @@ impl Log {
         self.unsaved_changes = true;
         self.flush_counter += 1;
 
-        // Batch flush for better performance
+        // batch flush (performance optimization)
         if self.flush_counter >= FLUSH_INTERVAL {
             let _ = self.writer.flush();
             self.flush_counter = 0;
@@ -112,7 +190,6 @@ impl Log {
     }
 
     pub fn save_as(&mut self, new_file_path: &PathBuf) -> Result<()> {
-        // Validate the file path before attempting to save
         let path_str = new_file_path.to_string_lossy();
         validation::validate_file_path(&path_str)?;
         

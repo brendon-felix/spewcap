@@ -1,4 +1,4 @@
-use crate::log::Log;
+use crate::log::LogFile;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
@@ -9,7 +9,7 @@ pub struct SharedState {
 }
 
 pub struct LogState {
-    pub active_log: Option<Log>,
+    pub active_log: Option<LogFile>,
 }
 
 pub type State = Arc<SharedState>;

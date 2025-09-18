@@ -1,8 +1,7 @@
-// TODO: Remove temp log files after they are saved OR experiment with large String buffer
-//   TODO: If still using file buffers, implement command to wipe the active file
 // TODO: Implement set port command
 //   TODO: Pause spew while setting port
 // TODO: Support writing to serial port -- maybe use a separate thread for this?
+// Note: RAII log file cleanup has been implemented using LogFile wrapper
 
 use clap::Parser;
 
@@ -16,28 +15,36 @@ mod utils;
 mod validation;
 
 fn main() {
-    if let Err(e) = run() {
+    let args = settings::Args::parse();
+    
+    if args.list {
+        if let Err(e) = utils::list_ports() {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+        return;
+    }
+    
+    let (config, state) = match utils::initialize_app(args) {
+        Ok((config, state)) => (config, state),
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            std::process::exit(1);
+        }
+    };
+    
+    if let Err(e) = run(config, state) {
         eprintln!("Error: {}", e);
         std::process::exit(1);
     }
 }
 
-fn run() -> error::Result<()> {
-    let args = settings::Args::parse();
-    
-    if args.list {
-        utils::list_ports()?;
-        return Ok(());
-    }
-    
-    // utils::enter_alternate_screen()?;
-    let mut config = settings::get_config(args)?;
+fn run(mut config: settings::Config, state: state::State) -> error::Result<()> {
     if !config.disable_welcome.unwrap_or(false) {
         utils::print_welcome();
     }
     config.select_missing()?;
     let settings = settings::get_settings(&config)?;
-    let state = state::init_state();
     if config.log_on_start.unwrap_or(false) {
         utils::start_new_log(&settings, &state)?;
     }
@@ -51,6 +58,8 @@ fn run() -> error::Result<()> {
     let command_result = command_thread
         .join()
         .map_err(|e| error::SpewcapError::ThreadJoin(format!("Command thread panicked: {:?}", e)))?;
+    
+    utils::cleanup_logs(&state);
     
     if let Err(e) = serial_result {
         eprintln!("Serial thread error: {}", e);

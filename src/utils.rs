@@ -13,12 +13,81 @@ use std::sync::{Arc, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::log::Log;
+use crate::log::LogFile;
 use crate::settings::Settings;
 use crate::state::{LogState, State};
 use crate::error::{Result, SpewcapError};
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
+
+pub fn initialize_app(args: crate::settings::Args) -> Result<(crate::settings::Config, State)> {
+    let config = crate::settings::get_config(args)?;
+    let state = crate::state::init_state();
+    
+    if let Err(e) = setup_signal_handlers(state.clone()) {
+        eprintln!("Warning: Failed to set up signal handlers: {}", e);
+    }
+    
+    Ok((config, state))
+}
+
+#[cfg(unix)]
+pub fn setup_signal_handlers(state: State) -> Result<()> {
+    use signal_hook::consts::signal::*;
+    use signal_hook::flag;
+    use std::sync::atomic::AtomicBool;
+
+    let term_flag = Arc::new(AtomicBool::new(false));
+    
+    for &signal in &[SIGINT, SIGTERM, SIGQUIT] {
+        flag::register(signal, Arc::clone(&term_flag))
+            .map_err(|e| SpewcapError::Signal(format!("Failed to register signal {}: {}", signal, e)))?;
+    }
+    
+    let state_clone = state.clone();
+    std::thread::spawn(move || {
+        loop {
+            if term_flag.load(Ordering::Relaxed) {
+                eprintln!("\nReceived termination signal, shutting down gracefully...");
+                emergency_cleanup_logs(&state_clone);
+                request_quit_with_state(&state_clone);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+    
+    Ok(())
+}
+
+#[cfg(windows)]
+pub fn setup_signal_handlers(state: State) -> Result<()> {
+    use signal_hook::consts::signal::*;
+    use signal_hook::flag;
+    use std::sync::atomic::AtomicBool;
+
+    let term_flag = Arc::new(AtomicBool::new(false));
+    
+    for &signal in &[SIGINT, SIGTERM] {
+        flag::register(signal, Arc::clone(&term_flag))
+            .map_err(|e| SpewcapError::Signal(format!("Failed to register signal {}: {}", signal, e)))?;
+    }
+    
+    let state_clone = state.clone();
+    std::thread::spawn(move || {
+        loop {
+            if term_flag.load(Ordering::Relaxed) {
+                eprintln!("\nReceived termination signal, shutting down gracefully...");
+                emergency_cleanup_logs(&state_clone);
+                request_quit_with_state(&state_clone);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
+    
+    Ok(())
+}
 
 pub fn get_log_state(shared_state: &State) -> Result<MutexGuard<'_, LogState>> {
     shared_state
@@ -141,7 +210,10 @@ pub fn request_quit(settings: &Settings, shared_state: &State) {
     terminal::disable_raw_mode().unwrap_or_else(|_| {
         print_error("Failed to disable raw terminal mode");
     });
-    let mut log_state = match get_log_state(shared_state) {
+    
+    emergency_cleanup_logs(shared_state);
+    
+    let log_state = match get_log_state(shared_state) {
         Ok(state) => state,
         Err(e) => {
             print_error(&format!("Failed to acquire lock on log state during quit: {e}"));
@@ -154,10 +226,6 @@ pub fn request_quit(settings: &Settings, shared_state: &State) {
         .as_ref()
         .map_or(false, |log| log.has_unsaved_changes());
 
-    // flush any remaining data before quitting
-    if let Some(log) = &mut log_state.active_log {
-        let _ = log.force_flush();
-    }
     drop(log_state);
 
     if need_save {
@@ -169,10 +237,15 @@ pub fn quit_requested(state: &State) -> bool {
     state.quit_requested.load(Ordering::Relaxed)
 }
 
+pub fn request_quit_with_state(shared_state: &State) {
+    shared_state.quit_requested.store(true, Ordering::Relaxed);
+    if let Err(_) = terminal::disable_raw_mode() {}
+}
+
 pub fn start_new_log(settings: &Settings, shared_state: &State) -> Result<()> {
     let mut log_state = shared_state.log_state.lock()
         .map_err(|e| SpewcapError::Log(format!("Failed to acquire lock: {e}")))?;
-    match Log::new(settings.timestamps) {
+    match LogFile::new(settings.timestamps) {
         Ok(log) => {
             let filename = log.get_filename().to_string();
             log_state.active_log = Some(log);
@@ -213,8 +286,10 @@ pub fn save_active_log(settings: &Settings, shared_state: &State) {
             if log.has_unsaved_changes() {
                 match run_file_dialog(log.get_filename(), &settings.log_folder) {
                     Some(log_path) => {
-                        match log.save_as(&log_path) {
-                            Ok(()) => print_success(&format!("Saved log to {}", log_path.display())),
+                        match log.save_as_and_keep(&log_path) {
+                            Ok(()) => {
+                                print_success(&format!("Saved log to {}", log_path.display()));
+                            }
                             Err(e) => print_error(&format!("Failed to save log: {}", e)),
                         }
                     }
@@ -261,4 +336,32 @@ pub fn list_ports() -> Result<()> {
         println!("{}", description);
     }
     Ok(())
+}
+
+pub fn cleanup_logs(shared_state: &State) {
+    if let Ok(mut log_state) = get_log_state(shared_state) {
+        if let Some(ref mut log) = log_state.active_log {
+            if let Err(e) = log.ensure_flushed() {
+                eprintln!("Warning: Failed to flush log during cleanup: {}", e);
+            }
+            
+            if log.has_unsaved_changes() {
+                print_warning("Active log has unsaved changes. It will be cleaned up unless saved.");
+            }
+        }
+    }
+}
+
+pub fn emergency_cleanup_logs(shared_state: &State) {
+    match shared_state.log_state.try_lock() {
+        Ok(mut log_state) => {
+            if let Some(ref mut log) = log_state.active_log {
+                let _ = log.ensure_flushed();
+                let _ = log.cleanup_temp_file();
+            }
+        }
+        Err(_) => {
+            eprintln!("Warning: Could not acquire log state lock during emergency cleanup");
+        }
+    }
 }
