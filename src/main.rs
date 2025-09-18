@@ -20,7 +20,7 @@ fn main() {
         std::process::exit(0);
     }
     
-    utils::clear_console();
+    utils::enter_alternate_screen();
     let mut config = settings::get_config(args);
     if !config.disable_welcome.unwrap_or(false) {
         utils::print_welcome();
@@ -43,4 +43,6 @@ fn main() {
     let _ = command_thread
         .join()
         .map_err(|e| println!("Command thread panicked: {:?}", e));
+    
+    utils::leave_alternate_screen();
 }

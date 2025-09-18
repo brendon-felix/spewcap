@@ -1,5 +1,7 @@
 use colored::Colorize;
 use crossterm::terminal;
+use crossterm::execute;
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
 use regex::Regex;
 use rfd::FileDialog;
 use serialport5::{available_ports, SerialPortType};
@@ -28,10 +30,28 @@ pub fn sleep(num_ms: u64) {
     std::thread::sleep(Duration::from_millis(num_ms));
 }
 
+pub fn enter_alternate_screen() {
+    if let Err(e) = execute!(std::io::stdout(), EnterAlternateScreen) {
+        print_error(&format!("Failed to enter alternate screen: {}", e));
+    }
+    if let Err(e) = execute!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0)) {
+        print_error(&format!("Failed to move cursor to top: {}", e));
+    }
+}
+
+pub fn leave_alternate_screen() {
+    if let Err(e) = execute!(std::io::stdout(), LeaveAlternateScreen) {
+        print_error(&format!("Failed to leave alternate screen: {}", e));
+    }
+}
+
 pub fn clear_console() {
-    let _ = std::process::Command::new("cmd")
-        .args(["/c", "cls"])
-        .status();
+    if let Err(e) = execute!(std::io::stdout(), terminal::Clear(terminal::ClearType::All)) {
+        print_error(&format!("Failed to clear console: {}", e));
+    }
+    if let Err(e) = execute!(std::io::stdout(), crossterm::cursor::MoveTo(0, 0)) {
+        print_error(&format!("Failed to move cursor: {}", e));
+    }
 }
 
 pub fn print_welcome() {
