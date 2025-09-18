@@ -1,23 +1,17 @@
 use chrono::Local;
 use colored::Colorize;
 use regex::Regex;
+use std::fmt::Write as FmtWrite;
 use std::fs::copy;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use std::{fs::File, io::BufWriter};
 
-use crate::constants::{
-    LINE_BUFFER_SHRINK_TARGET, LINE_BUFFER_SHRINK_THRESHOLD, LOG_FLUSH_INTERVAL,
-    LOG_LINE_BUFFER_INITIAL_CAPACITY, LOG_WRITER_BUFFER_CAPACITY, MILLIS_PER_HOUR,
-    MILLIS_PER_MINUTE, MILLIS_PER_SECOND, TIMESTAMP_BUFFER_INITIAL_CAPACITY,
-    TIMESTAMP_BUFFER_SHRINK_TARGET, TIMESTAMP_BUFFER_SHRINK_THRESHOLD,
-};
+use crate::constants::*;
 use crate::utils::{ansi_regex, print_message};
 use crate::validation;
 use crate::error::Result;
-
-
 
 pub struct LogFile {
     inner: Log,
@@ -109,12 +103,12 @@ pub struct Log {
     prepend_timestamps: bool,
     ansi_regex: Regex,
     start_time: Instant,
-
     // performance optimizations
     timestamp_buffer: String,
     line_buffer: String,
     flush_counter: usize,
 }
+
 impl Log {
     pub fn new(prepend_timestamps: bool) -> std::result::Result<Self, std::io::Error> {
         let filename = format!("log_{}.txt", Local::now().format("%Y%m%d_%H%M%S"));
@@ -161,7 +155,6 @@ impl Log {
 
     pub fn write_line(&mut self, raw_line: &str) {
         self.line_buffer.clear();
-
         // avoid regex if no ANSI codes detected (performance optimization)
         if raw_line.contains('\x1b') {
             self.line_buffer
@@ -169,27 +162,22 @@ impl Log {
         } else {
             self.line_buffer.push_str(raw_line);
         }
-
         if self.prepend_timestamps {
             self.create_timestamp_in_buffer(self.start_time.elapsed());
             self.line_buffer
                 .insert_str(0, &format!("[{}] ", self.timestamp_buffer));
         }
-
         self.writer
             .write_all(self.line_buffer.as_bytes())
             .expect("Failed to write to log");
-
         self.unsaved_changes = true;
         self.flush_counter += 1;
-
         // batch flush (performance optimization)
         if self.flush_counter >= LOG_FLUSH_INTERVAL {
             let _ = self.writer.flush();
             self.flush_counter = 0;
         }
-
-        // Prevent string buffer from growing indefinitely
+        // prevent growing indefinitely
         if self.line_buffer.capacity() > LINE_BUFFER_SHRINK_THRESHOLD {
             self.line_buffer.shrink_to(LINE_BUFFER_SHRINK_TARGET);
         }
@@ -206,7 +194,6 @@ impl Log {
     pub fn save_as(&mut self, new_file_path: &PathBuf) -> Result<()> {
         let path_str = new_file_path.to_string_lossy();
         validation::validate_file_path(&path_str)?;
-        
         match copy(&self.file_path, new_file_path) {
             Ok(_) => {
                 self.unsaved_changes = false;
@@ -227,8 +214,6 @@ impl Log {
         let minutes = (total_millis % MILLIS_PER_HOUR) / MILLIS_PER_MINUTE;
         let seconds = (total_millis % MILLIS_PER_MINUTE) / MILLIS_PER_SECOND;
         let millis = total_millis % MILLIS_PER_SECOND;
-
-        use std::fmt::Write;
         write!(
             self.timestamp_buffer,
             "{:02}:{:02}:{:02}:{:03}ms",

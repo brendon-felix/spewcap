@@ -4,10 +4,7 @@ use std::io::{self, BufWriter, Read, Write};
 use std::sync::atomic::Ordering;
 
 use crate::buffer::LineBuffer;
-use crate::constants::{
-    HIGH_THROUGHPUT_YIELD_THRESHOLD, SERIAL_NO_DATA_SLEEP, SERIAL_READ_BUFFER_SIZE,
-    SERIAL_READ_TIMEOUT, SERIAL_RETRY_DELAY, STDOUT_BUFFER_CAPACITY,
-};
+use crate::constants::*;
 use crate::settings::Settings;
 use crate::state::State;
 use crate::utils::{get_log_state, print_error, print_message, quit_requested, sleep_ms};
@@ -69,17 +66,14 @@ fn print_status(port_name: &str, status: ConnectionStatus) {
 }
 
 fn open_serial_port(port: &str, baud_rate: u32) -> Option<SerialPort> {
-    // Validate inputs before attempting to open the port
     if let Err(e) = validation::validate_port_name(port) {
         print_error(&format!("Invalid port: {e}"));
         return None;
     }
-    
     if let Err(e) = validation::validate_baud_rate(baud_rate) {
         print_error(&format!("Invalid baud rate: {e}"));
         return None;
     }
-    
     SerialPortBuilder::new()
         .baud_rate(baud_rate)
         .read_timeout(Some(SERIAL_READ_TIMEOUT))  // timeout duration from constants
@@ -94,12 +88,10 @@ fn read_loop<W: Write>(
 ) -> ConnectionStatus {
     let mut line_buffer = LineBuffer::new();
     let mut data_buffer = [0; SERIAL_READ_BUFFER_SIZE];
-    
     loop {
         if quit_requested(&shared_state) {
             return ConnectionStatus::Connected;
         }
-
         match read_data_from_port(&mut port, &mut data_buffer) {
             ReadResult::Data(data_size) => {
                 process_received_data(&mut line_buffer, &data_buffer, data_size, stdout, shared_state);
@@ -134,7 +126,6 @@ fn process_received_data<W: Write>(
 ) {
     line_buffer.write(data_buffer, data_size);
     let lines_processed = process_complete_lines(line_buffer, stdout, shared_state);
-    
     if lines_processed > 0 {
         flush_output(stdout);
     }
@@ -146,18 +137,15 @@ fn process_complete_lines<W: Write>(
     shared_state: &State,
 ) -> usize {
     let mut lines_processed = 0;
-    
     while let Some(line) = line_buffer.next_line() {
         output_line(&line, stdout, shared_state);
         lines_processed += 1;
-        
         // yield occasionally for very high throughput
         if lines_processed % HIGH_THROUGHPUT_YIELD_THRESHOLD == 0 {
             flush_output(stdout);
             std::thread::yield_now();
         }
     }
-    
     lines_processed
 }
 
@@ -171,11 +159,9 @@ fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &State) {
     if shared_state.capture_paused.load(Ordering::Relaxed) {
         return;
     }
-
     if let Err(e) = stdout.write_all(line.as_bytes()) {
         print_error(&format!("Failed to write to stdout: {e}"));
     }
-
     let mut log_state = match get_log_state(shared_state) {
         Ok(state) => state,
         Err(e) => {

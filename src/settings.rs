@@ -144,11 +144,9 @@ fn select_baud_rate() -> Result<u32> {
     let options = [
         4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
     ];
-    
-    // Find the index of the default baud rate (115200)
     let default_index = options.iter()
         .position(|&rate| rate == DEFAULT_BAUD_RATE)
-        .unwrap_or(5); // fallback to index 5 if not found
+        .unwrap_or(0);
     
     let selection = Select::new()
         .with_prompt("Select baud rate")
@@ -167,7 +165,6 @@ pub fn get_config(args: Args) -> Result<Config> {
 
 fn load_config_from_files() -> Result<Config> {
     let config_paths = get_config_file_paths();
-    
     for path in config_paths {
         if let Some(config) = Config::load(path) {
             return Ok(config);
@@ -180,7 +177,6 @@ fn load_config_from_files() -> Result<Config> {
 fn get_config_file_paths() -> Vec<PathBuf> {
     let curr_dir = utils::get_curr_directory();
     let exe_dir = utils::get_exe_directory().unwrap_or_else(|| utils::get_curr_directory());
-    
     vec![
         curr_dir.join("spewcap_config.toml"),
         exe_dir.join("spewcap_config.toml"),
@@ -192,7 +188,6 @@ pub fn get_settings(config: &Config) -> Result<Settings> {
     let baud_rate = extract_and_validate_baud_rate(config)?;
     let timestamps = config.timestamps.unwrap_or(false);
     let log_folder = extract_and_validate_log_folder(config)?;
-    
     Ok(Settings {
         port,
         baud_rate,

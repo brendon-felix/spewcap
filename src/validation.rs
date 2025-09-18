@@ -17,11 +17,9 @@ pub fn validate_baud_rate(baud_rate: u32) -> Result<u32> {
 pub fn validate_port_name(port_name: &str) -> Result<String> {
     let available_ports = available_ports()
         .map_err(|e| SpewcapError::SerialPort(e))?;
-    
     let port_exists = available_ports
         .iter()
         .any(|port| port.port_name == port_name);
-    
     if port_exists {
         Ok(port_name.to_string())
     } else {
@@ -31,11 +29,9 @@ pub fn validate_port_name(port_name: &str) -> Result<String> {
 
 pub fn validate_file_path(path: &str) -> Result<String> {
     let path_buf = Path::new(path);
-    
     if !path_buf.is_absolute() && !path_buf.exists() {
         let current_dir = std::env::current_dir()
             .map_err(|e| SpewcapError::InvalidFilePath(format!("Cannot access current directory: {e}")))?;
-        
         let full_path = current_dir.join(path_buf);
         validate_directory_writable(full_path.parent().unwrap_or(&current_dir))?;
     } else if path_buf.is_absolute() {
@@ -46,29 +42,23 @@ pub fn validate_file_path(path: &str) -> Result<String> {
             validate_directory_writable(parent)?;
         }
     }
-    
     Ok(path.to_string())
 }
 
 pub fn validate_directory_path(path: &str) -> Result<String> {
     let path_buf = Path::new(path);
-    
     if !path_buf.exists() {
         return Err(SpewcapError::InvalidFilePath(format!("Directory does not exist: {}", path)));
     }
-    
     if !path_buf.is_dir() {
         return Err(SpewcapError::InvalidFilePath(format!("Path is not a directory: {}", path)));
     }
-    
     validate_directory_writable(path_buf)?;
-    
     Ok(path.to_string())
 }
 
 fn validate_directory_writable(dir: &Path) -> Result<()> {
     let temp_file = dir.join(".spewcap_write_test");
-    
     match std::fs::write(&temp_file, b"test") {
         Ok(_) => {
             let _ = std::fs::remove_file(temp_file);
