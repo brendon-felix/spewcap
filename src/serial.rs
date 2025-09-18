@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crate::settings::Settings;
 use crate::state::State;
-use crate::utils::{print_error, print_message, quit_requested, sleep};
+use crate::utils::{print_error, print_message, quit_requested, sleep_ms};
 
 pub enum ConnectionStatus {
     Connected,
@@ -98,7 +98,7 @@ pub fn connect_loop(settings: Settings, shared_state: State) {
                 if first_attempt {
                     print_status(port_name, ConnectionStatus::NotConnected);
                 }
-                sleep(500); // wait before retrying
+                sleep_ms(500); // wait before retrying
             }
         }
         first_attempt = false;
@@ -141,7 +141,7 @@ fn read_loop<W: Write>(
         }
 
         match port.read(&mut data_buffer) {
-            Ok(0) => sleep(10),
+            Ok(0) => sleep_ms(10),
             Ok(data_size) => {
                 line_buffer.write(&data_buffer, data_size);
                 let mut lines_processed = 0;

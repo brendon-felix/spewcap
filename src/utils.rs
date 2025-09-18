@@ -26,7 +26,7 @@ pub fn get_log_state(shared_state: &State) -> Result<MutexGuard<'_, LogState>, S
         .map_err(|e| format!("Failed to acquire lock on log state: {e}"))
 }
 
-pub fn sleep(num_ms: u64) {
+pub fn sleep_ms(num_ms: u64) {
     std::thread::sleep(Duration::from_millis(num_ms));
 }
 

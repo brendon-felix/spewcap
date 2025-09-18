@@ -2,6 +2,7 @@
 //   TODO: If still using file buffers, implement command to wipe the active file
 // TODO: Implement set port command
 //   TODO: Pause spew while setting port
+// TODO: Support writing to serial port -- maybe use a separate thread for this?
 
 use clap::Parser;
 
