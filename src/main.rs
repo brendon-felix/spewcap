@@ -17,7 +17,7 @@ fn main() {
     
     if args.list {
         utils::list_ports();
-        std::process::exit(0);
+        return;
     }
     
     utils::enter_alternate_screen();
