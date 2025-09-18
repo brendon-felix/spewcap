@@ -171,7 +171,9 @@ fn output_line<W: Write>(line: &str, stdout: &mut W, shared_state: &State) {
     };
     if let Some(log) = &mut log_state.active_log {
         if log.is_enabled() {
-            log.write_line(line);
+            if let Err(e) = log.write_line(line) {
+                print_error(&format!("Failed to write to log file: {e}"));
+            }
         }
     }
 }

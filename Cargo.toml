@@ -9,6 +9,7 @@ serialport5 = { version = "5.0.2"} # currenly the only branch which works on win
 toml = "0.8.19"
 serde = { version = "1.0.217", features = ["derive"]}
 regex = "1.11.1"
+lazy_static = "1.5"
 chrono = "0.4.39"
 crossterm = "0.28.1"
 colored = "3.0.0"

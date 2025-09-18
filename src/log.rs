@@ -124,7 +124,7 @@ impl Log {
             enabled: true,
             unsaved_changes: false,
             prepend_timestamps,
-            ansi_regex,
+            ansi_regex: ansi_regex.clone(),
             start_time,
             timestamp_buffer: String::with_capacity(TIMESTAMP_BUFFER_INITIAL_CAPACITY),
             line_buffer: String::with_capacity(LOG_LINE_BUFFER_INITIAL_CAPACITY),
@@ -153,7 +153,7 @@ impl Log {
         &self.filename
     }
 
-    pub fn write_line(&mut self, raw_line: &str) {
+    pub fn write_line(&mut self, raw_line: &str) -> std::io::Result<()> {
         self.line_buffer.clear();
         // avoid regex if no ANSI codes detected (performance optimization)
         if raw_line.contains('\x1b') {
@@ -163,13 +163,17 @@ impl Log {
             self.line_buffer.push_str(raw_line);
         }
         if self.prepend_timestamps {
-            self.create_timestamp_in_buffer(self.start_time.elapsed());
+            if let Err(e) = self.create_timestamp_in_buffer(self.start_time.elapsed()) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to write timestamp: {}", e)
+                ));
+            }
             self.line_buffer
                 .insert_str(0, &format!("[{}] ", self.timestamp_buffer));
         }
         self.writer
-            .write_all(self.line_buffer.as_bytes())
-            .expect("Failed to write to log");
+            .write_all(self.line_buffer.as_bytes())?;
         self.unsaved_changes = true;
         self.flush_counter += 1;
         // batch flush (performance optimization)
@@ -184,6 +188,7 @@ impl Log {
         if self.timestamp_buffer.capacity() > TIMESTAMP_BUFFER_SHRINK_THRESHOLD {
             self.timestamp_buffer.shrink_to(TIMESTAMP_BUFFER_SHRINK_TARGET);
         }
+        Ok(())
     }
 
     pub fn force_flush(&mut self) -> std::io::Result<()> {
@@ -207,7 +212,7 @@ impl Log {
         }
     }
 
-    fn create_timestamp_in_buffer(&mut self, duration: Duration) {
+    fn create_timestamp_in_buffer(&mut self, duration: Duration) -> std::fmt::Result {
         self.timestamp_buffer.clear();
         let total_millis = duration.as_millis();
         let hours = total_millis / MILLIS_PER_HOUR;
@@ -219,6 +224,5 @@ impl Log {
             "{:02}:{:02}:{:02}:{:03}ms",
             hours, minutes, seconds, millis
         )
-        .expect("Failed to write timestamp");
     }
 }

@@ -2,6 +2,7 @@ use colored::Colorize;
 use crossterm::terminal;
 use crossterm::execute;
 // use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use lazy_static::lazy_static;
 use regex::Regex;
 use rfd::FileDialog;
 use serialport5::{available_ports, SerialPortType};
@@ -20,6 +21,11 @@ use crate::state::{LogState, State};
 use crate::error::{Result, SpewcapError};
 
 const ANSI_REGEX: &str = r"\x1b\[[0-9;]*[mK]";
+
+lazy_static! {
+    static ref ANSI_REGEX_COMPILED: Regex = Regex::new(ANSI_REGEX)
+        .expect("Invalid ANSI regex pattern - this is a compile-time constant");
+}
 
 pub fn initialize_app(args: crate::settings::Args) -> Result<(crate::settings::Config, State)> {
     let config = crate::settings::get_config(args)?;
@@ -135,8 +141,8 @@ Press `H` for help and `Q` to quit
     );
 }
 
-pub fn ansi_regex() -> Regex {
-    Regex::new(ANSI_REGEX).unwrap()
+pub fn ansi_regex() -> &'static Regex {
+    &ANSI_REGEX_COMPILED
 }
 pub fn reset_ansi() {
     print!("\x1b[0m")
@@ -236,7 +242,9 @@ pub fn quit_requested(state: &State) -> bool {
 
 pub fn request_quit_with_state(shared_state: &State) {
     shared_state.quit_requested.store(true, Ordering::Relaxed);
-    if terminal::disable_raw_mode().is_err() {}
+    if let Err(e) = terminal::disable_raw_mode() {
+        eprintln!("Warning: Failed to disable raw terminal mode: {}", e);
+    }
 }
 
 pub fn start_new_log(settings: &Settings, shared_state: &State) -> Result<()> {
