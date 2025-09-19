@@ -1,6 +1,6 @@
 # spewcap
 
-`spewcap` is a Rust-based command-line application for capturing and logging serial port data. It provides a user-friendly interface for managing serial port connections, capturing data, and saving logs.
+`spewcap` is a Rust-based command-line application for capturing and logging serial port data. It provides a clean and minimal interface for managing serial port connections, capturing data, and saving spew logs.
 
 ![demo](demo.gif)
 
